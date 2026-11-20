@@ -1,0 +1,18 @@
+# Learning vault. Compile and test from the repository root:
+#   npm run contracts:build
+#   npm run contracts:test
+#
+# `src` is where the contract lives. `out` is generated and gitignored.
+# The optimizer is off so the bytecode stays close to the source you read.
+# Nothing here is meant to hold real ETH.
+
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+test = "test"
+solc = "0.8.28"
+optimizer = false
+
+[fmt]
+line_length = 120

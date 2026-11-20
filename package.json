@@ -1,0 +1,29 @@
+{
+  "name": "learning-wallet",
+  "private": true,
+  "version": "0.1.0",
+  "description": "A heavily commented Ethereum wallet for learning self-custody. Not for real funds.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "wallet": "tsx src/cli.ts",
+    "test": "tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "contracts:build": "forge build --root foundry",
+    "contracts:test": "forge test --root foundry -vv"
+  },
+  "dependencies": {
+    "@noble/curves": "^1.9.0",
+    "@scure/bip32": "^1.7.0",
+    "@scure/bip39": "^1.5.4",
+    "dotenv": "^16.6.1",
+    "viem": "^2.38.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}

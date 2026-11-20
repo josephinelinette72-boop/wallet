@@ -1,0 +1,20 @@
+# Dependencies. Reinstall with `npm install`. Do not commit them.
+node_modules/
+
+# TypeScript build output. This project runs through tsx, so dist/ should stay empty.
+dist/
+
+# Secrets and local chain state.
+# `.env` can contain a Sepolia RPC URL with an API key.
+# `.wallet/` holds the encrypted mnemonic. Even encrypted, it does not belong in git.
+.env
+.wallet/
+
+# Foundry compiler output. Rebuild with `npm run contracts:build`.
+foundry/out/
+foundry/cache/
+foundry/broadcast/
+
+# Logs and OS junk.
+*.log
+.DS_Store

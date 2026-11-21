@@ -43,7 +43,7 @@ export function SendPage() {
       <div>
         <h1 className="font-serif text-4xl">Send ETH</h1>
         <p className="max-w-2xl text-sm leading-relaxed text-muted">
-          From {unlocked?.path}. A plain transfer also pays a fee, so sending the entire balance fails.
+          {unlocked?.kind === 'private-key' ? 'From the imported key.' : `From ${unlocked?.path ?? ''}.`} A plain transfer also pays a fee, so sending the entire balance fails.
         </p>
       </div>
       {tx.phase.step === 'review' ? (

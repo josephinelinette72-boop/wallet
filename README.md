@@ -521,9 +521,9 @@ The other address has to be one you can sign for (a second index: `npm run walle
 
 ## Using the web app
 
-The page does the same jobs as the commands below: create or import a phrase, unlock it, derive addresses, send ETH, sign a message, and talk to the vault and the property token. It adds a review screen before each signature, a rent chart, and a lesson drawer on every screen.
+The page does the same jobs as the commands below: create or import a phrase, import a raw private key, unlock it, derive addresses, send ETH, sign a message, and talk to the vault and the property token. It adds a review screen before each signature, a rent chart, and a lesson drawer on every screen.
 
-The 12 words and the file password stay in the browser. The encrypted copy is the same scrypt + AES-GCM JSON the command line writes to `.wallet/keystore.json`. It is stored in the browser's database (IndexedDB), not sent to a server, and not printed in the page's log. Do not type a phrase that holds real funds.
+The 12 words, a raw private key, and the file password stay in the browser. The encrypted copy is the same scrypt + AES-GCM JSON the command line writes to `.wallet/keystore.json`. A phrase file and a private-key file use that same lock. The private-key file adds a `secret` field so the page knows there is no phrase to derive from. It is stored in the browser's database (IndexedDB), not sent to a server, and not printed in the page's log. Do not type a phrase or a key that holds real funds.
 
 You open the page from Windows. Anvil runs in Ubuntu. The page does not call Anvil's port itself. It asks the dev server on port 5173, and that server, inside Ubuntu, asks Anvil. That is why the Windows browser can use `http://localhost:5173` and still reach the pretend chain.
 
@@ -572,15 +572,15 @@ The amber bar at the top does not go away. It says this is a test network. That 
 
 ### A walk through the screens
 
-**Welcome.** Three doors. Create makes 12 words and asks you to write them down, then type them back, before it encrypts them. Import takes words you already have. Open a keystore file takes the JSON from the command line (`.wallet/keystore.json`) so the same locked file works in both places. The file password is at least 8 characters and must not be the 12 words. The pause while saving is scrypt. It is supposed to happen.
+**Welcome.** Four doors. Create makes 12 words and asks you to write them down, then type them back, before it encrypts them. Import words takes a phrase you already have. Import a private key takes a `0x` key (64 hex characters, the shape `cast wallet new` prints). The page checks the key and shows the address it controls before anything is saved, then encrypts it with a file password. There is no recovery phrase for that wallet, and Accounts will not offer extra derived addresses. Open a keystore file takes the JSON from the command line (`.wallet/keystore.json`) so the same locked phrase file works in both places. A private-key file opens in the page, not in the command line. The file password is at least 8 characters and must not be the 12 words or the private key. The pause while saving is scrypt. It is supposed to happen.
 
-**Unlock and lock.** Unlock asks for that file password. If you set a BIP-39 passphrase, it asks for that too. They are different secrets. Lock drops the words from memory. It does not delete the encrypted copy. Forget, on the Accounts screen, does delete the copy in this browser. The paper is still the backup.
+**Unlock and lock.** Unlock asks for that file password. If you set a BIP-39 passphrase on a phrase wallet, it asks for that too. A private-key wallet does not have one. They are different secrets. Lock drops the secret from memory. It does not delete the encrypted copy. Forget, on the Accounts screen, does delete the copy in this browser. The paper phrase, or the private key you saved elsewhere, is the backup.
 
 **The top bar.** Anvil is the default. Sepolia asks for an https RPC URL, which often contains an API key. The box hides it. The URL stays in this browser. The dot is the connection, and the chain id is the number the node reported (31337 for Anvil, 11155111 for Sepolia). If those disagree, the page will not sign. Fund from Anvil is only on the home screen, and only while the node is local Anvil.
 
 **Home.** ETH, mock dollars, and property shares. Empty until you fund and deploy. Recent activity is this page's own sends plus contract logs. On Anvil, click Fund from Anvil to take play ETH from the published textbook account. The button refuses any other chain.
 
-**Accounts.** Each row is `m/44'/60'/0'/0/i`. Use one of them. Copy copies the address. The QR code is the address, not the key. Show the locked fields and you can see scrypt and a ciphertext, and download `keystore.json`.
+**Accounts.** For a phrase, each row is `m/44'/60'/0'/0/i`. Use one of them. For an imported private key there is one row and no path to derive. Copy copies the address. The QR code is the address, not the key. Show the locked fields and you can see scrypt and a ciphertext, and download `keystore.json`. The secret itself is not in that view.
 
 **Send.** Type an address and an amount of ETH, then Review. The review is the transaction: chain id, nonce, gas, max fee, tip, and value, with the same explanation the command line prints. Sign and send broadcasts it. Pending means the node has it. Confirmed means it was mined. The hash is public. It is not a key.
 

@@ -21,11 +21,20 @@ import { getAddress, type Address, type Hex } from 'viem';
 import type { WalletConfig } from '@wallet/config';
 import { assertExpectedChain } from '@wallet/safety';
 import { makePublicClient, toFriendlyError } from '@wallet/client';
-import { decryptMnemonicAsync, encryptMnemonicAsync, parseKeystore, type KeystoreFile } from '@wallet/keystoreCrypto';
+import { parsePrivateKey } from '@wallet/address';
+import {
+  decryptMnemonicAsync,
+  encryptMnemonicAsync,
+  encryptPrivateKeyAsync,
+  keystoreSecretKind,
+  parseKeystore,
+  type KeystoreFile,
+  type SecretKind,
+} from '@wallet/keystoreCrypto';
 import type { LearnTopic } from './learn';
 import { friendlyError } from './lib/errors';
 import { browserConfig, installBrowserRpcProxy, rpcProblem } from './lib/network';
-import { accountAt, closeSession, openSession } from './lib/session';
+import { accountAt, closeSession, openPrivateKeySession, openSession } from './lib/session';
 import {
   clearWalletStorage,
   loadAccounts,
@@ -51,7 +60,7 @@ export type PageId = 'dashboard' | 'accounts' | 'send' | 'sign' | 'vault' | 'pro
 export type WalletView =
   | { status: 'loading' }
   | { status: 'empty' }
-  | { status: 'locked'; usesPassphrase: boolean }
+  | { status: 'locked'; usesPassphrase: boolean; kind: SecretKind }
   | {
       status: 'unlocked';
       index: number;
@@ -59,6 +68,7 @@ export type WalletView =
       address: Address;
       path: string;
       usesPassphrase: boolean;
+      kind: SecretKind;
     };
 
 type LiveNetwork = {
@@ -91,6 +101,7 @@ type AppValue = {
   unlock: (password: string, passphrase: string) => Promise<void>;
   lock: () => void;
   saveNewWallet: (mnemonic: string, password: string, passphrase: string, onProgress?: (n: number) => void) => Promise<void>;
+  savePrivateKey: (privateKey: string, password: string, onProgress?: (n: number) => void) => Promise<void>;
   replaceKeystore: (file: KeystoreFile) => Promise<void>;
   forget: () => Promise<void>;
   selectAccount: (index: number) => void;
@@ -136,7 +147,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         setActivity(items);
         if (!file) setWallet({ status: 'empty' });
-        else setWallet({ status: 'locked', usesPassphrase: file.usesPassphrase });
+        else setWallet({ status: 'locked', usesPassphrase: file.usesPassphrase, kind: keystoreSecretKind(file) });
       } catch (error) {
         if (!cancelled) {
           setWallet({ status: 'empty' });
@@ -231,7 +242,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const showUnlocked = useCallback((index: number, count: number, usesPassphrase: boolean) => {
+  const showUnlocked = useCallback((index: number, count: number, usesPassphrase: boolean, kind: SecretKind) => {
     const account = accountAt(index);
     setWallet({
       status: 'unlocked',
@@ -240,6 +251,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       address: account.address,
       path: account.path,
       usesPassphrase,
+      kind,
     });
   }, []);
 
@@ -247,10 +259,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async (password: string, passphrase: string) => {
       const file = await loadKeystore();
       if (!file) throw new Error('There is no locked wallet in this browser yet.');
-      const mnemonic = await decryptMnemonicAsync(file, password);
-      openSession(mnemonic, file.usesPassphrase ? passphrase : '');
-      const saved = loadAccounts();
-      showUnlocked(saved.index, saved.count, file.usesPassphrase);
+      const plain = await decryptMnemonicAsync(file, password);
+      const kind = keystoreSecretKind(file);
+      if (kind === 'private-key') {
+        openPrivateKeySession(parsePrivateKey(plain));
+        saveAccounts({ index: 0, count: 1 });
+        showUnlocked(0, 1, false, 'private-key');
+      } else {
+        openSession(plain, file.usesPassphrase ? passphrase : '');
+        const saved = loadAccounts();
+        showUnlocked(saved.index, saved.count, file.usesPassphrase, 'mnemonic');
+      }
       setPage('dashboard');
     },
     [showUnlocked],
@@ -260,8 +279,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     closeSession();
     setWallet((current) =>
       current.status === 'unlocked'
-        ? { status: 'locked', usesPassphrase: current.usesPassphrase }
-        : { status: 'locked', usesPassphrase: false },
+        ? { status: 'locked', usesPassphrase: current.usesPassphrase, kind: current.kind }
+        : { status: 'locked', usesPassphrase: false, kind: 'mnemonic' },
     );
   }, []);
 
@@ -276,9 +295,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await saveKeystoreRecord(file);
       openSession(mnemonic, passphrase);
       saveAccounts({ index: 0, count: 1 });
-      showUnlocked(0, 1, passphrase.length > 0);
+      showUnlocked(0, 1, passphrase.length > 0, 'mnemonic');
       setPage('dashboard');
-      setNotice('The 12 words are not stored as plaintext. This page will not show them again. The paper copy is the backup.');
+      setNotice('The recovery phrase is encrypted in this browser. This page will not show it again.');
+    },
+    [showUnlocked],
+  );
+
+  const savePrivateKey = useCallback(
+    async (privateKey: string, password: string, onProgress?: (n: number) => void) => {
+      const key = parsePrivateKey(privateKey);
+      const file = await encryptPrivateKeyAsync(key, password, {}, onProgress);
+      await saveKeystoreRecord(file);
+      openPrivateKeySession(key);
+      saveAccounts({ index: 0, count: 1 });
+      showUnlocked(0, 1, false, 'private-key');
+      setPage('dashboard');
+      setNotice('The private key is encrypted in this browser. This page will not show it again.');
     },
     [showUnlocked],
   );
@@ -288,8 +321,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await saveKeystoreRecord(parsed);
     closeSession();
     saveAccounts({ index: 0, count: 1 });
-    setWallet({ status: 'locked', usesPassphrase: parsed.usesPassphrase });
-    setNotice('The locked file is in this browser. The words were not in it. Unlock with the file password.');
+    setWallet({ status: 'locked', usesPassphrase: parsed.usesPassphrase, kind: keystoreSecretKind(parsed) });
+    setNotice('The locked file is in this browser. Unlock it with the file password.');
   }, []);
 
   const forget = useCallback(async () => {
@@ -299,26 +332,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActivity([]);
     setWallet({ status: 'empty' });
     setPage('dashboard');
-    setNotice('This browser forgot the locked file. The paper words still open the same keys. Anvil balances were never in the browser.');
+    setNotice('This browser forgot the locked file. A copy of the phrase or private key is the only way back in.');
   }, []);
 
   const selectAccount = useCallback(
     (index: number) => {
       if (wallet.status !== 'unlocked') return;
+      if (wallet.kind === 'private-key') return;
       const count = wallet.accountCount;
       if (index < 0 || index >= count) return;
       saveAccounts({ index, count });
-      showUnlocked(index, count, wallet.usesPassphrase);
+      showUnlocked(index, count, wallet.usesPassphrase, wallet.kind);
     },
     [showUnlocked, wallet],
   );
 
   const addAccount = useCallback(() => {
     if (wallet.status !== 'unlocked') return;
+    if (wallet.kind === 'private-key') return;
     if (wallet.accountCount >= 10) return;
     const count = wallet.accountCount + 1;
     saveAccounts({ index: wallet.index, count });
-    showUnlocked(wallet.index, count, wallet.usesPassphrase);
+    showUnlocked(wallet.index, count, wallet.usesPassphrase, wallet.kind);
   }, [showUnlocked, wallet]);
 
   const value = useMemo<AppValue>(
@@ -350,6 +385,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       unlock,
       lock,
       saveNewWallet,
+      savePrivateKey,
       replaceKeystore,
       forget,
       selectAccount,
@@ -373,6 +409,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       unlock,
       lock,
       saveNewWallet,
+      savePrivateKey,
       replaceKeystore,
       forget,
       selectAccount,

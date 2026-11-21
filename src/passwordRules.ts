@@ -19,6 +19,17 @@ export function assertFilePassword(password: string, mnemonic: string): void {
   }
 }
 
+export function assertKeyPassword(password: string, privateKey: string): void {
+  if (password.length < 8) {
+    throw new Error('Use at least 8 characters for the file password. Nothing was saved.');
+  }
+  const key = privateKey.trim().toLowerCase().replace(/^0x/, '');
+  const typed = password.normalize('NFC').toLowerCase().replace(/^0x/, '');
+  if (typed === key) {
+    throw new Error('The file password must be different from the private key. Nothing was saved.');
+  }
+}
+
 export function assertPasswordsMatch(first: string, second: string): void {
   if (first !== second) {
     throw new Error('The two passwords did not match. Nothing was saved.');

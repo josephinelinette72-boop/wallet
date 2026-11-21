@@ -8,15 +8,18 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { parseEther } from 'viem';
-import { addressFromPrivateKey } from '../src/address.js';
+import { accountFromPrivateKey } from '../src/account.js';
+import { addressFromPrivateKey, parsePrivateKey } from '../src/address.js';
 import { derivePrivateKey, ethereumPath } from '../src/hd.js';
 import {
   decryptMnemonic,
   decryptMnemonicAsync,
   encryptMnemonic,
   encryptMnemonicAsync,
+  encryptPrivateKeyAsync,
+  keystoreSecretKind,
 } from '../src/keystoreCrypto.js';
-import { assertFilePassword, assertPasswordsMatch } from '../src/passwordRules.js';
+import { assertFilePassword, assertKeyPassword, assertPasswordsMatch } from '../src/passwordRules.js';
 import {
   earnedRent,
   formatEthDisplay,
@@ -119,4 +122,19 @@ test('the file password rules match the CLI sentences', () => {
   assert.throws(() => assertFilePassword(PHRASE, PHRASE), /different from the 12 words/);
   assert.throws(() => assertPasswordsMatch('abcdefgh', 'abcdefgi'), /did not match/);
   assert.doesNotThrow(() => assertFilePassword('abcdefgh', PHRASE));
+  const key = '0x1ab42cc412b618bdea3a599e3c9bae199ebf030895b039e9db1e30dafb12b727';
+  assert.throws(() => assertKeyPassword('short', key), /at least 8 characters/);
+  assert.throws(() => assertKeyPassword(key, key), /different from the private key/);
+  assert.doesNotThrow(() => assertKeyPassword('abcdefgh', key));
+});
+
+test('the page can encrypt a raw key with the same async lock as a phrase', async () => {
+  const key = '0x1ab42cc412b618bdea3a599e3c9bae199ebf030895b039e9db1e30dafb12b727';
+  const file = await encryptPrivateKeyAsync(key, PASSWORD, { n: 1024 });
+  assert.equal(keystoreSecretKind(file), 'private-key');
+  assert.equal(decryptMnemonic(file, PASSWORD), key);
+  assert.equal(accountFromPrivateKey(parsePrivateKey(key)).address, INDEX_0);
+  const phraseFile = encryptMnemonic(PHRASE, PASSWORD, { n: 1024 });
+  assert.equal(keystoreSecretKind(phraseFile), 'mnemonic');
+  assert.equal(phraseFile.secret, undefined);
 });

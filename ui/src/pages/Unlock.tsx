@@ -13,7 +13,9 @@ import { friendlyError } from '../lib/errors';
 
 export function Unlock() {
   const app = useApp();
-  const usesPassphrase = app.wallet.status === 'locked' && app.wallet.usesPassphrase;
+  const locked = app.wallet.status === 'locked' ? app.wallet : null;
+  const usesPassphrase = Boolean(locked?.usesPassphrase);
+  const keyOnly = locked?.kind === 'private-key';
   const [password, setPassword] = useState('');
   const [passphrase, setPassphrase] = useState('');
   const [busy, setBusy] = useState(false);
@@ -48,8 +50,9 @@ export function Unlock() {
         </div>
         <Card className="space-y-4">
           <Note>
-            The file password decrypts the words on this computer. It is not sent to the network. A short pause is the
-            password stretching doing its job.
+            {keyOnly
+              ? 'The file password decrypts the private key on this computer. It is not sent to the network. A short pause is the password stretching doing its job.'
+              : 'The file password decrypts the recovery phrase on this computer. It is not sent to the network. A short pause is the password stretching doing its job.'}
           </Note>
           {error ? <Note tone="bad">{error}</Note> : null}
           <Field label="File password">

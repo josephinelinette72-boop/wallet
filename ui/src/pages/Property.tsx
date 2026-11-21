@@ -92,7 +92,9 @@ export function PropertyPage() {
           property: { address: property, source: 'this browser' },
           who: unlocked.address,
         });
-        const extras = Array.from({ length: unlocked.accountCount }, (_, index) => accountAt(index).address);
+        const extras = unlocked.kind === 'private-key'
+          ? [unlocked.address]
+          : Array.from({ length: unlocked.accountCount }, (_, index) => accountAt(index).address);
         const chain = await readPropertyChain({
           config,
           property,

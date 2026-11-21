@@ -73,6 +73,36 @@ export function applyEip55(address: string): Hex {
   return checksummed as Hex;
 }
 
+/**
+ * Accept a 0x-prefixed 32-byte secp256k1 private key.
+ *
+ * The hex may be any case. The returned form is lowercase `0x` plus 64 hex
+ * characters, which is what the keystore stores and what viem signs with.
+ * The key itself is never included in an error.
+ */
+export function parsePrivateKey(input: string): Hex {
+  const trimmed = input.trim();
+  if (!/^0x/i.test(trimmed)) {
+    throw new Error('A private key must start with 0x. Nothing was saved.');
+  }
+  const body = trimmed.slice(2);
+  if (!/^[0-9a-fA-F]{64}$/.test(body)) {
+    throw new Error('A private key is 0x followed by 64 hex characters (32 bytes). Nothing was saved.');
+  }
+  const bytes = new Uint8Array(32);
+  for (let i = 0; i < 32; i += 1) {
+    bytes[i] = Number.parseInt(body.slice(i * 2, i * 2 + 2), 16);
+  }
+  try {
+    if (!secp256k1.utils.isValidPrivateKey(bytes)) {
+      throw new Error('That value is not a valid secp256k1 private key. Nothing was saved.');
+    }
+  } finally {
+    bytes.fill(0);
+  }
+  return `0x${body.toLowerCase()}` as Hex;
+}
+
 export function addressFromPrivateKey(privateKey: Uint8Array): Hex {
   const uncompressed = uncompressedPublicKey(privateKey);
   // Drop the 0x04 prefix. Hash the remaining 64 bytes.

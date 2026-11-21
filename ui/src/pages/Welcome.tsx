@@ -8,15 +8,17 @@
  */
 import { useRef, useState } from 'react';
 import { BookOpen } from 'lucide-react';
+import { accountFromPrivateKey } from '@wallet/account';
+import { parsePrivateKey } from '@wallet/address';
 import { assertValidMnemonic, createMnemonic, normalizeMnemonic } from '@wallet/hd';
 import { parseKeystore } from '@wallet/keystoreCrypto';
-import { assertFilePassword, assertPasswordsMatch } from '@wallet/passwordRules';
+import { assertFilePassword, assertKeyPassword, assertPasswordsMatch } from '@wallet/passwordRules';
 import { useApp } from '../state';
 import { LearnDrawer } from '../components/LearnDrawer';
 import { Banner, Button, Card, Field, Note, Spinner, TextArea, TextInput } from '../components/ui';
 import { friendlyError } from '../lib/errors';
 
-type Mode = 'choose' | 'create' | 'import' | 'file';
+type Mode = 'choose' | 'create' | 'import' | 'key' | 'file';
 type CreateStep = 'words' | 'confirm' | 'password';
 
 export function Welcome() {
@@ -45,14 +47,16 @@ export function Welcome() {
         {app.notice ? <Note>{app.notice}</Note> : null}
         {error ? <Note tone="bad">{error}</Note> : null}
         {mode === 'choose' ? (
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Choice title="Create" body="Make 12 new words from random bits, write them down, then lock them." onClick={() => { setError(null); setMode('create'); }} />
             <Choice title="Import words" body="Type a phrase you already wrote down. This is how a forgotten file password is fixed." onClick={() => { setError(null); setMode('import'); }} />
-            <Choice title="Open a keystore file" body="Use the JSON from the command line. It does not contain the words in a form you can read." onClick={() => { setError(null); setMode('file'); }} />
+            <Choice title="Import a private key" body="Paste a 0x key, such as one from cast wallet new. The address is shown before it is saved." onClick={() => { setError(null); setMode('key'); }} />
+            <Choice title="Open a keystore file" body="Use the JSON from the command line. It does not contain the secret in a form you can read." onClick={() => { setError(null); setMode('file'); }} />
           </div>
         ) : null}
         {mode === 'create' ? <CreateFlow onBack={() => setMode('choose')} onError={setError} /> : null}
         {mode === 'import' ? <ImportFlow onBack={() => setMode('choose')} onError={setError} /> : null}
+        {mode === 'key' ? <KeyFlow onBack={() => setMode('choose')} onError={setError} /> : null}
         {mode === 'file' ? <FileFlow onBack={() => setMode('choose')} onError={setError} /> : null}
       </main>
       <LearnDrawer topic="welcome" open={learnOpen} onClose={() => setLearnOpen(false)} />
@@ -251,6 +255,82 @@ function ImportFlow({ onBack, onError }: { onBack: () => void; onError: (message
       </Field>
       {busy ? <Spinner label="Stretching the password. This pause is on purpose." /> : null}
       <Button onClick={() => void save()} disabled={busy}>Encrypt and save in this browser</Button>
+    </Card>
+  );
+}
+
+function KeyFlow({ onBack, onError }: { onBack: () => void; onError: (message: string | null) => void }) {
+  const app = useApp();
+  const [privateKey, setPrivateKey] = useState('');
+  const [password, setPassword] = useState('');
+  const [again, setAgain] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(0);
+
+  const trimmedKey = privateKey.trim();
+  let address: string | null = null;
+  let keyError: string | null = null;
+  if (trimmedKey.length > 0 && !/^0x/i.test(trimmedKey)) {
+    keyError = 'A private key must start with 0x.';
+  } else if (trimmedKey.length >= 66) {
+    try {
+      address = accountFromPrivateKey(parsePrivateKey(trimmedKey)).address;
+    } catch (error) {
+      keyError = friendlyError(error);
+    }
+  }
+
+  async function save() {
+    onError(null);
+    try {
+      const key = parsePrivateKey(privateKey);
+      assertKeyPassword(password, key);
+      assertPasswordsMatch(password, again);
+      setBusy(true);
+      await app.savePrivateKey(key, password, (value) => setProgress(Math.round(value * 100)));
+      setPrivateKey('');
+      setPassword('');
+      setAgain('');
+    } catch (error) {
+      onError(friendlyError(error));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="font-serif text-3xl">Import a private key</h2>
+        <Button tone="ghost" onClick={onBack}>Back</Button>
+      </div>
+      <Note>
+        Paste a 0x key. The address below is derived before anything is written. The key is then encrypted with the
+        same password lock as a phrase wallet. It is not sent to a server, and this page will not show it again.
+      </Note>
+      <Field label="Private key" hint="0x followed by 64 hex characters.">
+        <TextInput
+          type="password"
+          value={privateKey}
+          onChange={(event) => setPrivateKey(event.target.value)}
+          autoComplete="off"
+          spellCheck={false}
+          className="font-mono"
+        />
+      </Field>
+      {address ? (
+        <Note tone="good">
+          This key controls <span className="break-all font-mono">{address}</span>. Check it before you save.
+        </Note>
+      ) : null}
+      {keyError ? <Note tone="bad">{keyError}</Note> : null}
+      <Field label="New file password for this browser">
+        <TextInput type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" />
+      </Field>
+      <Field label="Type the file password again">
+        <TextInput type="password" value={again} onChange={(event) => setAgain(event.target.value)} autoComplete="new-password" />
+      </Field>
+      {busy ? <Spinner label={`Stretching the password${progress > 0 ? ` (${progress}%)` : ''}. This pause is on purpose.`} /> : null}
+      <Button onClick={() => void save()} disabled={busy || !address}>Encrypt and save in this browser</Button>
     </Card>
   );
 }

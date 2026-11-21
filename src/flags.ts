@@ -23,6 +23,12 @@ export type Flags = {
   address?: string;
   chain?: string;
   vault?: string;
+  /** PropertyShare address for one command. Wins over .env and the saved file. */
+  property?: string;
+  /** Whole number of shares. The token has 0 decimals. */
+  shares?: string;
+  /** Mock dollars, in human units. 6 decimals, like USDC. */
+  amount?: string;
 };
 
 export type ParsedCli = {
@@ -55,6 +61,9 @@ export function parseCli(argv: string[]): ParsedCli {
     address?: string;
     chain?: string;
     vault?: string;
+    property?: string;
+    shares?: string;
+    amount?: string;
     force: boolean;
     yes: boolean;
     help: boolean;
@@ -76,6 +85,9 @@ export function parseCli(argv: string[]): ParsedCli {
         address: { type: 'string' },
         chain: { type: 'string' },
         vault: { type: 'string' },
+        property: { type: 'string' },
+        shares: { type: 'string' },
+        amount: { type: 'string' },
         force: { type: 'boolean', default: false },
         yes: { type: 'boolean', default: false },
         help: { type: 'boolean', default: false },
@@ -102,6 +114,9 @@ export function parseCli(argv: string[]): ParsedCli {
     address: values.address,
     chain: values.chain,
     vault: values.vault,
+    property: values.property,
+    shares: values.shares,
+    amount: values.amount,
   };
 
   if (flags.count < 1) {
@@ -131,6 +146,17 @@ Learning wallet. Never use a seed phrase that controls real money.
   npm run wallet -- contract status [--index 0] [--address 0x...]
   npm run wallet -- contract deposit --eth 0.1 [--index 0] [--yes]
   npm run wallet -- contract withdraw --eth 0.1 [--index 0] [--yes]
+  npm run wallet -- property deploy [--index 0] [--yes]
+  npm run wallet -- property info [--address 0x...]
+  npm run wallet -- property allow --address 0x... [--yes]
+  npm run wallet -- property freeze --address 0x... [--yes]
+  npm run wallet -- property transfer --to 0x... --shares 250000 [--yes]
+  npm run wallet -- property deposit-eth --eth 1 [--yes]
+  npm run wallet -- property approve-stable --amount 1000 [--yes]
+  npm run wallet -- property deposit-stable --amount 1000 [--yes]
+  npm run wallet -- property claimable [--address 0x...]
+  npm run wallet -- property claim-eth [--yes]
+  npm run wallet -- property claim-stable [--yes]
 
 The "--" is required. It tells npm that the words after it belong to the wallet.
 
@@ -138,7 +164,10 @@ The "--" is required. It tells npm that the words after it belong to the wallet.
 --index N               which address from the phrase (default 0)
 --yes                   broadcast without typing YES (the fields are still printed)
 --force                 allow create/import to replace an existing keystore
---vault 0x...           contract address for one command
+--vault 0x...           LearningVault address for one command
+--property 0x...        PropertyShare address for one command
+--shares N              whole shares to transfer (0 decimals)
+--amount N              mock dollars, such as 1000 or 250.5 (6 decimals)
 
 Balances and verify do not need your words when you pass --address.
 fund only works against local Anvil (chain id 31337). It spends from Anvil's

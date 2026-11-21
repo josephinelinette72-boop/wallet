@@ -31,3 +31,15 @@ export function vaultArtifactPath(projectRoot = process.cwd()): string {
   // is the bytes we send when we deploy. It does not exist until `forge build`.
   return path.join(projectRoot, 'foundry', 'out', 'LearningVault.sol', 'LearningVault.json');
 }
+
+export function propertyRecordPath(cwd = process.cwd()): string {
+  return path.join(walletDir(cwd), 'property.json');
+}
+
+export function propertyArtifactPath(projectRoot = process.cwd()): string {
+  return path.join(projectRoot, 'property-token', 'out', 'PropertyShare.sol', 'PropertyShare.json');
+}
+
+export function stablecoinArtifactPath(projectRoot = process.cwd()): string {
+  return path.join(projectRoot, 'property-token', 'out', 'MockStablecoin.sol', 'MockStablecoin.json');
+}

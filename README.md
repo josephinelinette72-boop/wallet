@@ -11,6 +11,7 @@ You will build a small self-custody wallet and a small Solidity contract, and yo
 - A command-line wallet that creates a 12-word phrase, encrypts it with a password, and can send ETH and sign messages.
 - A pretend Ethereum node (Anvil) full of play money.
 - A tiny Solidity piggy-bank contract, with tests, that your wallet can deposit into and withdraw from.
+- A second contract that splits a pretend rental into 1,000,000 shares, pays rent to whoever held the shares when the rent arrived, and refuses to deploy anywhere except a test network.
 
 ## The picture to keep in your head
 
@@ -247,6 +248,8 @@ npm run contracts:test
 
 **What this teaches:** a test is another contract that calls yours and `require`s the result. `1 ether` in Solidity means `10**18` wei.
 
+The property-share lesson in section 14 is a second Foundry project. Finish the vault first. The vault has no libraries, so you can read every line. The property lesson brings in OpenZeppelin on purpose.
+
 Compile, so the wallet can read the bytecode:
 
 ```bash
@@ -340,6 +343,181 @@ npm run wallet -- balance --chain anvil
 
 **What this teaches:** the wallet does not contain the network. The RPC URL is where the bytes go. Chain id is how a signature is tied to one network.
 
+## 14. Optional: shares in a pretend rental
+
+This lesson is a model of fractional ownership. It is not an offer to sell anything. There is no building, no company, and no investor. The deploy script refuses every chain except Anvil (31337) and Sepolia (11155111). Do not point it at mainnet, and do not take anyone's money with it.
+
+Open `property-token/src/PropertyShare.sol` and read the header before the functions. The short version of that header:
+
+**The shares.** The contract mints exactly 1,000,000 tokens and never mints again. Together they mean "100% of the property". 250,000 tokens is 25%. Decimals are 0, so the number `cast` prints is the number of shares. (ETH uses 18 decimals. The play dollar uses 6. Three different scales show up on purpose. Read the unit before you trust the number.)
+
+**The legal wrapper, in the real world.** A token balance is not a signature on a deed. A county recorder does not read Ethereum. A project that actually connects tokens to a house puts the house in a company, usually a limited liability company (an LLC). The deed names the LLC. The LLC's operating agreement, which is an ordinary legal contract, says that the people holding the tokens are the members, in proportion to their balances, and that rent is paid that way. This contract stores the street as text, a URI where that agreement would be downloaded, and `documentHash`, which is keccak256 of the file. Change one byte of the file and the hash changes, so holders can see the document was swapped. The hash does not enforce the agreement. A court and the operating agreement do that. The sentence this lesson hashes says, in the hash's own input, that no such file exists.
+
+**Why this is usually a security.** People would buy the shares because they expect rent, and they expect that rent because a manager does the work. Under the US Howey test, that pattern is an investment contract, which is a security. Selling securities to the public means registration or a specific exemption, disclosures, and rules about who may buy and resell. Other countries have their own versions. This repository is not a registration, not an exemption, and not legal advice.
+
+**The allowlist.** `setAllowed` is the classroom stand-in for those transfer rules. A real security token's list is fed by an identity check (KYC: a regulated party has looked at a passport and a sanctions list). Here the manager writes down an address. Both the sender and the recipient must be on the list or the transfer reverts. Revoking an address that still holds shares freezes them. There is no function that seizes shares. Freezing is still a real power. Do not freeze your own address while you hold shares.
+
+**The rent math.** The manager deposits ETH, or the play dollar in `MockStablecoin.sol`. The contract does not loop over holders. It adds one number, "rent earned by a single share since the beginning". Your claim is your balance times that number. The moment shares move, both parties are snapshotted first, so the seller keeps rent from before the sale and the buyer does not collect it. You call `claimEth` or `claimStable` to take what you are owed. The books update before the money moves, and a reentrancy lock covers claim and deposit together. Tests try to get paid twice. They fail, which is the point.
+
+The code and a longer walkthrough live in [`property-token/README.md`](property-token/README.md). The commands below are enough to run it.
+
+### Tests, then a local deploy
+
+From the repository folder, in Ubuntu:
+
+```bash
+npm run property:test
+```
+
+Foundry runs the tests in memory. Anvil does not have to be running. The first run downloads the Solidity compiler.
+
+Start Anvil in a second Ubuntu terminal if it is not already running from step 3. In the first terminal:
+
+```bash
+cd property-token
+forge script script/Deploy.s.sol
+```
+
+That rehearsal prints the plan and sends nothing. The key it names is Anvil's published first account. Foundry prints that key in the Anvil banner. It is not a secret, and the script refuses to use it on any chain except 31337.
+
+```bash
+forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
+```
+
+Copy the two addresses out of the log. They are not secrets.
+
+```bash
+export RPC=http://127.0.0.1:8545
+export PROPERTY=0xPASTE_THE_PropertyShare_ADDRESS
+export STABLE=0xPASTE_THE_MockStablecoin_ADDRESS
+export ALICE=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+export ALICE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+export BOB=0x70997970C51812dc3A010C7d01b50e0d17dc79C8
+export BOB_KEY=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
+```
+
+`ALICE` is Anvil account 0, the deployer. `BOB` is Anvil account 1. Both keys are published textbook keys. Do not send them anything you care about. Do not use them on Sepolia.
+
+```bash
+cast call $PROPERTY "balanceOf(address)(uint256)" $ALICE --rpc-url $RPC
+cast call $PROPERTY "documentHash()(bytes32)" --rpc-url $RPC
+cast keccak "PLACEHOLDER ONLY. This is not a deed or an LLC agreement. There is no building and no company behind these tokens."
+```
+
+The balance is `1000000`. The two hashes match. `cast call` is a free read. No key, no fee.
+
+Bob is not on the allowlist yet, so a transfer to Bob reverts. Then allow him and move 25% of the shares:
+
+```bash
+cast send $PROPERTY "setAllowed(address,bool)" $BOB true --private-key $ALICE_KEY --rpc-url $RPC
+cast send $PROPERTY "transfer(address,uint256)" $BOB 250000 --private-key $ALICE_KEY --rpc-url $RPC
+cast call $PROPERTY "balanceOf(address)(uint256)" $ALICE --rpc-url $RPC
+cast call $PROPERTY "balanceOf(address)(uint256)" $BOB --rpc-url $RPC
+```
+
+Alice has 750000. Bob has 250000.
+
+Deposit 1 ETH of rent. The amount is the transaction's value, which `--value 1ether` sets. Then read what each address could claim:
+
+```bash
+cast send $PROPERTY "depositEth()" --value 1ether --private-key $ALICE_KEY --rpc-url $RPC
+cast call $PROPERTY "claimableEth(address)(uint256)" $ALICE --rpc-url $RPC
+cast call $PROPERTY "claimableEth(address)(uint256)" $BOB --rpc-url $RPC
+```
+
+Alice's number is `750000000000000000` wei, which is 0.75 ETH. Bob's is 0.25 ETH. 75% and 25%. Bob takes his:
+
+```bash
+cast send $PROPERTY "claimEth()" --private-key $BOB_KEY --rpc-url $RPC
+cast call $PROPERTY "claimableEth(address)(uint256)" $BOB --rpc-url $RPC
+```
+
+Bob's claimable is now 0. Alice has not claimed, so she still shows 0.75 ETH.
+
+Sell Bob another 250000 shares, and look again before any new rent:
+
+```bash
+cast send $PROPERTY "transfer(address,uint256)" $BOB 250000 --private-key $ALICE_KEY --rpc-url $RPC
+cast call $PROPERTY "claimableEth(address)(uint256)" $ALICE --rpc-url $RPC
+cast call $PROPERTY "claimableEth(address)(uint256)" $BOB --rpc-url $RPC
+```
+
+Alice still shows 0.75 ETH. Bob still shows 0. The sale did not move rent that was already earned. Deposit another 1 ETH. The balances are 50/50 now, so this new ether splits in half, and the old 0.75 stays with Alice:
+
+```bash
+cast send $PROPERTY "depositEth()" --value 1ether --private-key $ALICE_KEY --rpc-url $RPC
+cast call $PROPERTY "claimableEth(address)(uint256)" $ALICE --rpc-url $RPC
+cast call $PROPERTY "claimableEth(address)(uint256)" $BOB --rpc-url $RPC
+```
+
+Alice is `1250000000000000000` wei (1.25 ETH). Bob is 0.5 ETH.
+
+The play dollar is the other rail. ERC-20 does not let the property pull tokens until Alice approves it. 1000 mock dollars is `1000000000` base units, because the token has 6 decimals (`1000 * 10^6`). After the second share sale the split is 50/50, so each claimable is 500 dollars (`500000000` base units):
+
+```bash
+cast send $STABLE "approve(address,uint256)" $PROPERTY 1000000000 --private-key $ALICE_KEY --rpc-url $RPC
+cast send $PROPERTY "depositStable(uint256)" 1000000000 --private-key $ALICE_KEY --rpc-url $RPC
+cast call $PROPERTY "claimableStable(address)(uint256)" $ALICE --rpc-url $RPC
+cast call $PROPERTY "claimableStable(address)(uint256)" $BOB --rpc-url $RPC
+cast send $PROPERTY "claimStable()" --private-key $BOB_KEY --rpc-url $RPC
+```
+
+`claimStable` has no `--value`. The dollars move inside the call. The transaction value stays 0. You still pay a fee from Bob's ETH.
+
+**What this teaches:** a deposit updates one number, not a list of people. A transfer snapshots the two people involved, so buying in the middle of the month does not steal the earlier rent. ETH rides in `value`. An ERC-20 rides in an approval plus `transferFrom`. Reads are free. Claims are signed.
+
+Stopping Anvil deletes the contracts. The rehearsal command works again after you start Anvil.
+
+### Sepolia
+
+Sepolia ETH is play money on a public network. The property shares are still not a real offering. Use a new practice key. Do not reuse words that have ever held real ETH. Do not use `ALICE_KEY`. The script checks for that key and stops.
+
+1. Put a Sepolia RPC URL in `.env` as `SEPOLIA_RPC_URL`, the same way as section 13. Do not commit `.env`.
+2. Fund the practice address from a Sepolia faucet.
+3. Load the practice key into the shell without saving it in a file. In Ubuntu:
+
+   ```bash
+   read -s DEPLOYER_PRIVATE_KEY
+   export DEPLOYER_PRIVATE_KEY
+   ```
+
+   `read -s` does not print the key as you type. It is still in the shell's memory until you close the terminal. Do not put the key after the command name (`forge script --private-key 0x...`), because that form lands in shell history.
+
+4. From `property-token`:
+
+   ```bash
+   source ../.env
+   forge script script/Deploy.s.sol --rpc-url "$SEPOLIA_RPC_URL" --broadcast
+   unset DEPLOYER_PRIVATE_KEY
+   ```
+
+5. The same `cast call` and `cast send` lines work if you set `RPC` to `$SEPOLIA_RPC_URL` and use the practice key instead of `ALICE_KEY`. Bob has to be an address you control on Sepolia, and that address needs a little Sepolia ETH to pay the claim fee.
+
+`forge script` against a mainnet RPC stops before it sends, with a revert that names chain id 1. Try it only against a URL you already know is a test URL. The refusal is the guard.
+
+### The wallet, if you want it to sign instead of `cast`
+
+`cast send --private-key` puts a key in the command. The wallet from the first half of this README signs with the encrypted keystore instead, and it prints the transaction fields before it broadcasts. From the repository folder, with Anvil running and the account funded (`npm run wallet -- fund --eth 2`):
+
+```bash
+npm run property:build
+npm run wallet -- property deploy
+npm run wallet -- property info
+npm run wallet -- property allow --address 0xTHE_OTHER_ADDRESS
+npm run wallet -- property transfer --to 0xTHE_OTHER_ADDRESS --shares 250000
+npm run wallet -- property deposit-eth --eth 1
+npm run wallet -- property claimable --address 0xTHE_OTHER_ADDRESS
+npm run wallet -- property approve-stable --amount 1000
+npm run wallet -- property deposit-stable --amount 1000
+npm run wallet -- property claim-eth
+```
+
+`property deploy` makes your keystore address the admin, the manager, and the first shareholder, then mints you 1,000,000 play dollars. The addresses are saved in `.wallet/property.json`. That file is not a secret. It is gitignored because the whole `.wallet` folder is.
+
+The other address has to be one you can sign for (a second index: `npm run wallet -- property claim-eth --index 1`) or you keep using `cast` for Bob. `--index 1` is the next address from the same 12 words. Fund it on Anvil with `npm run wallet -- fund --eth 1 --index 1` so it can pay a claim fee.
+
+**What this teaches:** the wallet and `cast` send the same kind of transaction. The wallet's extra step is the preview and the keystore. Neither one turns the token into a deed.
+
 ## Map of the project
 
 | Path | What it is |
@@ -353,6 +531,12 @@ npm run wallet -- balance --chain anvil
 | `src/commands/` | One file per command. |
 | `foundry/src/LearningVault.sol` | The piggy-bank contract. |
 | `foundry/test/LearningVault.t.sol` | Contract tests. |
+| `property-token/src/PropertyShare.sol` | The rental-share token, the rent math, and the allowlist. |
+| `property-token/src/MockStablecoin.sol` | Play dollars with 6 decimals. The owner can mint. They are not dollars. |
+| `property-token/script/Deploy.s.sol` | Deploys both contracts on Anvil or Sepolia, and refuses every other chain. |
+| `property-token/test/PropertyShare.t.sol` | Distribution, transfers, access control, reentrancy, fuzz. |
+| `property-token/README.md` | The long version of section 14, next to the code. |
+| `src/property.ts` | The wallet's calls to those contracts. |
 | `test/vectors.test.ts` | Known BIP-39 and address answers that must not change. |
 | `.env.example` | Settings you may copy. The real `.env` stays local. |
 
@@ -372,15 +556,24 @@ npm run wallet -- contract deploy
 npm run wallet -- contract status
 npm run wallet -- contract deposit --eth 0.1
 npm run wallet -- contract withdraw --eth 0.05
+npm run wallet -- property deploy
+npm run wallet -- property info
+npm run wallet -- property allow --address 0x...
+npm run wallet -- property transfer --to 0x... --shares 250000
+npm run wallet -- property deposit-eth --eth 1
+npm run wallet -- property claimable
+npm run wallet -- property claim-eth
 npm test
 npm run contracts:test
+npm run property:test
 ```
 
 `--yes` prints the same preview and then broadcasts without asking you to type YES. Use it only when you already read the fields.
 
 ## What this wallet will not do
 
-- It will not talk to mainnet. `CHAIN` may only be `anvil` or `sepolia`.
+- It will not talk to mainnet. `CHAIN` may only be `anvil` or `sepolia`. The property deploy script refuses mainnet a second time, by chain id, even if you point `forge script` at a mainnet URL.
+- It will not turn a token balance into ownership of a building. The property lesson is a classroom model of a security. It is not an offering.
 - It will not print a private key, and it has no flag for putting a password on the command line. Passwords typed on the command line end up in shell history.
 - It will not show the 12 words again after creation. The paper copy is the recovery path. A forgotten file password is fixed by importing the words. Forgotten words are not fixable.
 - It will not import this keystore into MetaMask. MetaMask wants the words.
@@ -411,7 +604,13 @@ On Anvil, run `npm run wallet -- fund --eth 1`. Remember the fee. Sending the en
 You are in the wrong folder, or you have not run `create` yet. `cd` to the project and look for `.wallet/keystore.json`.
 
 **`Could not find the compiled contract`**
-Run `npm run contracts:build`, then `contract deploy` again.
+Run `npm run contracts:build`, then `contract deploy` again. For the property lesson the command is `npm run property:build`.
+
+**`NotAllowed(...)` when you transfer shares**
+The recipient is not on the allowlist. `setAllowed` that address, then transfer. If you froze your own address, allow it again before the shares can move.
+
+**`Refusing to deploy` from the property script**
+The RPC is not Anvil or Sepolia, or you tried to use Anvil's published key on a public network. Point `--rpc-url` at Anvil or Sepolia, and use a new practice key on Sepolia.
 
 **`SEPOLIA_RPC_URL is empty`**
 Copy `.env.example` to `.env` and set the URL, or switch `CHAIN` back to `anvil`.

@@ -29,6 +29,8 @@ export type WalletConfig = {
   rpcUrl: string;
   /** Raw value from VAULT_ADDRESS, if the user set one. Not validated yet. */
   vaultAddressFromEnv?: string;
+  /** Raw value from PROPERTY_ADDRESS, if the user set one. Not validated yet. */
+  propertyAddressFromEnv?: string;
 };
 
 /**
@@ -69,6 +71,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, chainOverride?:
       chain: anvilChain,
       rpcUrl,
       vaultAddressFromEnv: blankToUndefined(env.VAULT_ADDRESS),
+      propertyAddressFromEnv: blankToUndefined(env.PROPERTY_ADDRESS),
     };
   }
 
@@ -88,6 +91,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, chainOverride?:
     chain: sepolia,
     rpcUrl,
     vaultAddressFromEnv: blankToUndefined(env.VAULT_ADDRESS),
+    propertyAddressFromEnv: blankToUndefined(env.PROPERTY_ADDRESS),
   };
 }
 

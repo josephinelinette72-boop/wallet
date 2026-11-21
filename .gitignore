@@ -10,10 +10,14 @@ dist/
 .env
 .wallet/
 
-# Foundry compiler output. Rebuild with `npm run contracts:build`.
+# Foundry compiler output. Rebuild with `npm run contracts:build`
+# and `npm run property:build`.
 foundry/out/
 foundry/cache/
 foundry/broadcast/
+property-token/out/
+property-token/cache/
+property-token/broadcast/
 
 # Logs and OS junk.
 *.log

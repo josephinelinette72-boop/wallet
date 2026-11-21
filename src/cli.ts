@@ -20,6 +20,7 @@ import { contractCommand } from './commands/contract.js';
 import { createCommand } from './commands/create.js';
 import { fundCommand } from './commands/fund.js';
 import { importCommand } from './commands/importWallet.js';
+import { propertyCommand } from './commands/property.js';
 import { sendCommand } from './commands/send.js';
 import { signCommand } from './commands/sign.js';
 import { verifyCommand } from './commands/verify.js';
@@ -61,6 +62,9 @@ async function main(): Promise<void> {
       return;
     case 'contract':
       await contractCommand(parsed.sub, parsed.flags);
+      return;
+    case 'property':
+      await propertyCommand(parsed.sub, parsed.flags);
       return;
     default:
       console.log(HELP);

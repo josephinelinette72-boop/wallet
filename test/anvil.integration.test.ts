@@ -15,7 +15,22 @@ import { accountFromMnemonic } from '../src/account.js';
 import { fundAddress } from '../src/anvilDev.js';
 import { makePublicClient } from '../src/client.js';
 import { loadConfig } from '../src/config.js';
-import { vaultArtifactPath } from '../src/paths.js';
+import { propertyArtifactPath, vaultArtifactPath } from '../src/paths.js';
+import {
+  encodeApproveStable,
+  encodeClaimEth,
+  encodeDepositEth,
+  encodeDepositStable,
+  encodeMintStable,
+  encodePropertyDeploy,
+  encodeSetAllowed,
+  encodeStablecoinDeploy,
+  encodeTransferShares,
+  PLAY_DOLLARS_BASE_UNITS,
+  prepareCall,
+  prepareDeploy,
+  readPropertyOverview,
+} from '../src/property.js';
 import { prepareEthTransfer } from '../src/transfer.js';
 import { deployVault, prepareVaultWrite, readVaultStatus } from '../src/vault.js';
 
@@ -131,4 +146,172 @@ test('local anvil: fund, send, and use the vault when it is compiled', { timeout
   assert.equal(statusAfter.yourSavedWei, parseEther('0.15'));
   assert.equal(statusAfter.ledgerTotalWei, parseEther('0.15'));
   assert.equal(statusAfter.nodeBalanceWei, parseEther('0.15'));
+});
+
+test('local anvil: property shares, a mid-stream sale, and a claim', { timeout: 60_000 }, async (t) => {
+  if (!anvilInstalled()) {
+    t.skip('anvil is not on PATH');
+    return;
+  }
+  if (!existsSync(propertyArtifactPath())) {
+    t.skip('compile with npm run property:build to cover the property commands');
+    return;
+  }
+
+  const child: ChildProcess = spawn(
+    'anvil',
+    ['--host', '127.0.0.1', '--port', '18546', '--chain-id', '31337'],
+    { stdio: 'ignore' },
+  );
+  t.after(() => {
+    child.kill('SIGKILL');
+  });
+
+  const rpcUrl = 'http://127.0.0.1:18546';
+  await waitForRpc(rpcUrl);
+  const config = loadConfig({ CHAIN: 'anvil', ANVIL_RPC_URL: rpcUrl });
+  const seller = accountFromMnemonic(PHRASE, 0);
+  const buyer = accountFromMnemonic(PHRASE, 1);
+  await fundAddress(config, seller.address, parseEther('2'));
+  await fundAddress(config, buyer.address, parseEther('1'));
+
+  const stableDeploy = await prepareDeploy({
+    config,
+    account: seller.account,
+    path: seller.path,
+    data: encodeStablecoinDeploy(seller.address),
+    action: 'deploy mock dollar',
+    note: 'test',
+  });
+  const stable = await stableDeploy.send();
+  assert.ok(stable.contractAddress);
+
+  const propertyDeploy = await prepareDeploy({
+    config,
+    account: seller.account,
+    path: seller.path,
+    data: encodePropertyDeploy({ stablecoin: stable.contractAddress, admin: seller.address }),
+    action: 'deploy property',
+    note: 'test',
+  });
+  const property = await propertyDeploy.send();
+  assert.ok(property.contractAddress);
+  const propertyAddress = property.contractAddress;
+
+  const mint = await prepareCall({
+    config,
+    account: seller.account,
+    path: seller.path,
+    to: stable.contractAddress,
+    data: encodeMintStable(seller.address, PLAY_DOLLARS_BASE_UNITS),
+    valueWei: 0n,
+    action: 'mint',
+    note: 'test',
+  });
+  await mint.send();
+
+  const allow = await prepareCall({
+    config,
+    account: seller.account,
+    path: seller.path,
+    to: propertyAddress,
+    data: encodeSetAllowed(buyer.address, true),
+    valueWei: 0n,
+    action: 'allow',
+    note: 'test',
+  });
+  await allow.send();
+
+  const sale = await prepareCall({
+    config,
+    account: seller.account,
+    path: seller.path,
+    to: propertyAddress,
+    data: encodeTransferShares(buyer.address, 250_000n),
+    valueWei: 0n,
+    action: 'transfer',
+    note: 'test',
+  });
+  await sale.send();
+
+  const deposit = await prepareCall({
+    config,
+    account: seller.account,
+    path: seller.path,
+    to: propertyAddress,
+    data: encodeDepositEth(),
+    valueWei: parseEther('1'),
+    action: 'deposit',
+    note: 'test',
+  });
+  await deposit.send();
+
+  const resolved = { address: propertyAddress, source: 'test' };
+  const sellerView = await readPropertyOverview({ config, property: resolved, who: seller.address });
+  const buyerView = await readPropertyOverview({ config, property: resolved, who: buyer.address });
+  assert.equal(sellerView.yourShares, 750_000n);
+  assert.equal(buyerView.yourShares, 250_000n);
+  assert.equal(sellerView.claimableEthWei, parseEther('0.75'));
+  assert.equal(buyerView.claimableEthWei, parseEther('0.25'));
+
+  const claim = await prepareCall({
+    config,
+    account: buyer.account,
+    path: buyer.path,
+    to: propertyAddress,
+    data: encodeClaimEth(),
+    valueWei: 0n,
+    action: 'claim',
+    note: 'test',
+  });
+  await claim.send();
+  const buyerAfterClaim = await readPropertyOverview({ config, property: resolved, who: buyer.address });
+  assert.equal(buyerAfterClaim.claimableEthWei, 0n);
+
+  // Selling more shares does not move the rent the seller already earned.
+  const secondSale = await prepareCall({
+    config,
+    account: seller.account,
+    path: seller.path,
+    to: propertyAddress,
+    data: encodeTransferShares(buyer.address, 250_000n),
+    valueWei: 0n,
+    action: 'transfer',
+    note: 'test',
+  });
+  await secondSale.send();
+  const sellerAfterSale = await readPropertyOverview({ config, property: resolved, who: seller.address });
+  assert.equal(sellerAfterSale.yourShares, 500_000n);
+  assert.equal(sellerAfterSale.claimableEthWei, parseEther('0.75'));
+
+  const approve = await prepareCall({
+    config,
+    account: seller.account,
+    path: seller.path,
+    to: stable.contractAddress,
+    data: encodeApproveStable(propertyAddress, 1_000_000_000n),
+    valueWei: 0n,
+    action: 'approve',
+    note: 'test',
+  });
+  await approve.send();
+  const stableDeposit = await prepareCall({
+    config,
+    account: seller.account,
+    path: seller.path,
+    to: propertyAddress,
+    data: encodeDepositStable(1_000_000_000n),
+    valueWei: 0n,
+    action: 'deposit stable',
+    note: 'test',
+  });
+  await stableDeposit.send();
+  const sellerDollars = await readPropertyOverview({ config, property: resolved, who: seller.address });
+  const buyerDollars = await readPropertyOverview({ config, property: resolved, who: buyer.address });
+  // 50/50 after the second sale. 1000 mock dollars, 6 decimals.
+  assert.equal(sellerDollars.claimableStableBase, 500_000_000n);
+  assert.equal(buyerDollars.claimableStableBase, 500_000_000n);
+  // The ETH from the first round did not get paid out again.
+  assert.equal(sellerDollars.claimableEthWei, parseEther('0.75'));
+  assert.equal(buyerDollars.claimableEthWei, 0n);
 });

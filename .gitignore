@@ -3,6 +3,7 @@ node_modules/
 
 # TypeScript build output. This project runs through tsx, so dist/ should stay empty.
 dist/
+ui/dist/
 
 # Secrets and local chain state.
 # `.env` can contain a Sepolia RPC URL with an API key.

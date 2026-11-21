@@ -153,6 +153,49 @@ export const propertyShareAbi = [
     ],
     outputs: [{ type: 'bool' }],
   },
+  // Events are logs in the receipt. The web app reads them for the cap table
+  // and the rent chart. `indexed` is what a node can filter on. The amounts
+  // are not indexed, so they sit in the data and still come back with the log.
+  {
+    type: 'event',
+    name: 'Transfer',
+    anonymous: false,
+    inputs: [
+      { name: 'from', type: 'address', indexed: true },
+      { name: 'to', type: 'address', indexed: true },
+      { name: 'value', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'RentDeposited',
+    anonymous: false,
+    inputs: [
+      { name: 'payer', type: 'address', indexed: true },
+      { name: 'asset', type: 'address', indexed: true },
+      { name: 'amount', type: 'uint256', indexed: false },
+      { name: 'rewardPerShareStored', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'RentClaimed',
+    anonymous: false,
+    inputs: [
+      { name: 'holder', type: 'address', indexed: true },
+      { name: 'asset', type: 'address', indexed: true },
+      { name: 'amount', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'AllowedSet',
+    anonymous: false,
+    inputs: [
+      { name: 'account', type: 'address', indexed: true },
+      { name: 'allowed', type: 'bool', indexed: false },
+    ],
+  },
 ] as const;
 
 export const mockStablecoinAbi = [
@@ -169,6 +212,16 @@ export const mockStablecoinAbi = [
     name: 'balanceOf',
     stateMutability: 'view',
     inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'allowance',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' },
+    ],
     outputs: [{ type: 'uint256' }],
   },
   {
@@ -265,6 +318,7 @@ type ArtifactAbiItem = {
 export function propertyAbiSignature(item: ArtifactAbiItem): string | undefined {
   const inputs = (item.inputs ?? []).map((input) => input.type ?? '').join(',');
   if (item.type === 'constructor') return `constructor(${inputs})`;
+  if (item.type === 'event' && item.name) return `event ${item.name}(${inputs})`;
   if (!item.name || item.type !== 'function') return undefined;
   return `function ${item.name}(${inputs}) ${item.stateMutability ?? ''}`;
 }
@@ -342,6 +396,11 @@ async function waitForSuccess(publicClient: PublicClient, hash: Hex): Promise<{ 
 
 export type PreparedCall = {
   preview: string;
+  fields: FeeFields;
+  /** Missing when this transaction creates a contract. */
+  to?: Address;
+  data: Hex;
+  valueWei: bigint;
   send: () => Promise<{ hash: Hex; contractAddress?: Hex }>;
 };
 
@@ -376,6 +435,9 @@ export async function prepareDeploy(input: {
     });
     return {
       preview,
+      fields,
+      data: input.data,
+      valueWei: 0n,
       send: async () => {
         const hash = await walletClient.sendTransaction({
           account,
@@ -396,10 +458,12 @@ export async function prepareDeploy(input: {
   }
 }
 
-export function encodeStablecoinDeploy(owner: Address, projectRoot = process.cwd()): Hex {
+export function encodeStablecoinDeploy(owner: Address, projectRoot?: string, bytecode?: Hex): Hex {
   return encodeDeployData({
     abi: mockStablecoinAbi,
-    bytecode: loadStablecoinBytecode(projectRoot),
+    // The CLI reads the compiled file. The web app passes the bytecode it
+    // already fetched, so this function does not touch the disk.
+    bytecode: bytecode ?? loadStablecoinBytecode(projectRoot),
     args: [owner],
   });
 }
@@ -408,10 +472,11 @@ export function encodePropertyDeploy(input: {
   stablecoin: Address;
   admin: Address;
   projectRoot?: string;
+  bytecode?: Hex;
 }): Hex {
   return encodeDeployData({
     abi: propertyShareAbi,
-    bytecode: loadPropertyBytecode(input.projectRoot),
+    bytecode: input.bytecode ?? loadPropertyBytecode(input.projectRoot),
     args: [
       '123 Main Street Shares',
       'MAIN',
@@ -470,6 +535,10 @@ export async function prepareCall(input: {
     };
     return {
       preview: describeTransaction(preview),
+      fields,
+      to: input.to,
+      data: input.data,
+      valueWei: input.valueWei,
       send: async () => {
         const hash = await walletClient.sendTransaction({
           account,

@@ -29,7 +29,7 @@ import type { WalletConfig } from './config.js';
 import { parseUserAddress } from './address.js';
 import { assertNodeIsExpectedChain, makePublicClient, makeWalletClient, toFriendlyError } from './client.js';
 import { vaultArtifactPath, vaultRecordPath } from './paths.js';
-import { describeTransaction, type FeeFields, type TransactionPreview } from './preview.js';
+import { describeTransaction, type FeeFields } from './preview.js';
 
 export const learningVaultAbi = [
   // Solidity writes an empty constructor for us. Foundry leaves that empty
@@ -206,9 +206,20 @@ export async function deployVault(input: {
   account: PrivateKeyAccount;
   path?: string;
   projectRoot?: string;
-}): Promise<{ preview: string; send: () => Promise<{ hash: Hex; address: Hex }> }> {
+  /**
+   * The web app passes bytecode it fetched from the dev server. The CLI
+   * leaves this unset and reads `foundry/out` from disk.
+   */
+  bytecode?: Hex;
+}): Promise<{
+  preview: string;
+  fields: FeeFields;
+  data: Hex;
+  valueWei: bigint;
+  send: () => Promise<{ hash: Hex; address: Hex }>;
+}> {
   const { config, account } = input;
-  const bytecode = loadVaultBytecode(input.projectRoot);
+  const bytecode = input.bytecode ?? loadVaultBytecode(input.projectRoot);
   const publicClient = makePublicClient(config);
   const walletClient = makeWalletClient(config, account);
 
@@ -228,6 +239,9 @@ export async function deployVault(input: {
 
     return {
       preview,
+      fields,
+      data: bytecode,
+      valueWei: 0n,
       send: async () => {
         const hash = await walletClient.deployContract({
           abi: learningVaultAbi,
@@ -307,7 +321,14 @@ export async function prepareVaultWrite(input: {
   vault: Address;
   functionName: 'deposit' | 'withdraw';
   amountWei: bigint;
-}): Promise<{ preview: string; send: () => Promise<Hex> }> {
+}): Promise<{
+  preview: string;
+  fields: FeeFields;
+  to: Address;
+  data: Hex;
+  valueWei: bigint;
+  send: () => Promise<Hex>;
+}> {
   const { config, account } = input;
   const publicClient = makePublicClient(config);
   const walletClient = makeWalletClient(config, account);
@@ -375,6 +396,10 @@ export async function prepareVaultWrite(input: {
 
     return {
       preview,
+      fields,
+      to: input.vault,
+      data,
+      valueWei,
       send: async () => {
         const hash = await walletClient.sendTransaction({
           account,

@@ -15,14 +15,39 @@ import type { PrivateKeyAccount } from 'viem/accounts';
 import type { WalletConfig } from './config.js';
 import { assertExpectedChain, redactRpcUrl, scrubSecrets } from './safety.js';
 
+/**
+ * The web app sets this once, before any request. viem would otherwise call
+ * the node URL directly from the browser. That fails for two reasons a
+ * beginner hits immediately: the browser blocks it (CORS), and a Windows
+ * browser's 127.0.0.1 is not the Ubuntu machine where Anvil is running.
+ *
+ * The replacement fetch posts to the Vite dev server on the same page. The
+ * dev server forwards the bytes to the real node. The URL string on the
+ * config is unchanged, so the chain-id check and the Anvil faucet check
+ * still see `127.0.0.1` and chain id 31337.
+ *
+ * The CLI never calls this. `rpcFetch` stays unset and viem uses the normal
+ * HTTP fetch straight to the RPC URL.
+ */
+let rpcFetch: typeof fetch | undefined;
+
+export function setRpcFetch(fetchFn: typeof fetch | undefined): void {
+  rpcFetch = fetchFn;
+}
+
+function transportFor(rpcUrl: string) {
+  return http(rpcUrl, {
+    // One retry, then a clear error. A missing Anvil should not spin for a minute.
+    timeout: 10_000,
+    retryCount: 1,
+    fetchFn: rpcFetch,
+  });
+}
+
 export function makePublicClient(config: WalletConfig): PublicClient {
   return createPublicClient({
     chain: config.chain,
-    transport: http(config.rpcUrl, {
-      // One retry, then a clear error. A missing Anvil should not spin for a minute.
-      timeout: 10_000,
-      retryCount: 1,
-    }),
+    transport: transportFor(config.rpcUrl),
   });
 }
 
@@ -30,7 +55,7 @@ export function makeWalletClient(config: WalletConfig, account: PrivateKeyAccoun
   return createWalletClient({
     account,
     chain: config.chain,
-    transport: http(config.rpcUrl, { timeout: 10_000, retryCount: 1 }),
+    transport: transportFor(config.rpcUrl),
   });
 }
 

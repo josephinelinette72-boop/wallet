@@ -12,6 +12,7 @@ You will build a small self-custody wallet and a small Solidity contract, and yo
 - A pretend Ethereum node (Anvil) full of play money.
 - A tiny Solidity piggy-bank contract, with tests, that your wallet can deposit into and withdraw from.
 - A second contract that splits a pretend rental into 1,000,000 shares, pays rent to whoever held the shares when the rent arrived, and refuses to deploy anywhere except a test network.
+- A web page for the same wallet, in `ui/`. The words stay in your browser. The page is a textbook you can click. The command line below is the same wallet, written out so you can read every step.
 
 ## The picture to keep in your head
 
@@ -518,11 +519,89 @@ The other address has to be one you can sign for (a second index: `npm run walle
 
 **What this teaches:** the wallet and `cast` send the same kind of transaction. The wallet's extra step is the preview and the keystore. Neither one turns the token into a deed.
 
+## Using the web app
+
+The page does the same jobs as the commands below: create or import a phrase, unlock it, derive addresses, send ETH, sign a message, and talk to the vault and the property token. It adds a review screen before each signature, a rent chart, and a lesson drawer on every screen.
+
+The 12 words and the file password stay in the browser. The encrypted copy is the same scrypt + AES-GCM JSON the command line writes to `.wallet/keystore.json`. It is stored in the browser's database (IndexedDB), not sent to a server, and not printed in the page's log. Do not type a phrase that holds real funds.
+
+You open the page from Windows. Anvil runs in Ubuntu. The page does not call Anvil's port itself. It asks the dev server on port 5173, and that server, inside Ubuntu, asks Anvil. That is why the Windows browser can use `http://localhost:5173` and still reach the pretend chain.
+
+### Start Anvil
+
+Open an Ubuntu window, go to the project folder, and leave this running:
+
+```bash
+anvil
+```
+
+Stopping it (Ctrl+C) erases the pretend chain. The encrypted words in the browser stay. Balances and contracts do not.
+
+### Compile the contracts
+
+In a second Ubuntu window, in the project folder:
+
+```bash
+nvm use
+npm install
+npm run contracts:build
+npm run property:build
+```
+
+The first command is the vault. The second is the property token and the play dollar. The page reads the compiled bytecode from the dev server when you click Deploy. If you skip the build, Deploy says so and tells you which command to run.
+
+`npm test`, `npm run contracts:test`, and `npm run property:test` do not need the page. Run them whenever you want the lessons checked.
+
+### Start the page
+
+Still in the project folder:
+
+```bash
+npm run ui
+```
+
+Leave that window open. Vite prints a local URL. In the Windows browser, open:
+
+```text
+http://localhost:5173
+```
+
+`localhost` here is the Windows name for the Ubuntu dev server. WSL forwards it. If the page does not load, the `npm run ui` window is not running, or Windows is not forwarding localhost. The command listens on every interface, port 5173, so the address Vite prints is the one to try.
+
+The amber bar at the top does not go away. It says this is a test network. That is intentional.
+
+### A walk through the screens
+
+**Welcome.** Three doors. Create makes 12 words and asks you to write them down, then type them back, before it encrypts them. Import takes words you already have. Open a keystore file takes the JSON from the command line (`.wallet/keystore.json`) so the same locked file works in both places. The file password is at least 8 characters and must not be the 12 words. The pause while saving is scrypt. It is supposed to happen.
+
+**Unlock and lock.** Unlock asks for that file password. If you set a BIP-39 passphrase, it asks for that too. They are different secrets. Lock drops the words from memory. It does not delete the encrypted copy. Forget, on the Accounts screen, does delete the copy in this browser. The paper is still the backup.
+
+**The top bar.** Anvil is the default. Sepolia asks for an https RPC URL, which often contains an API key. The box hides it. The URL stays in this browser. The dot is the connection, and the chain id is the number the node reported (31337 for Anvil, 11155111 for Sepolia). If those disagree, the page will not sign. Fund from Anvil is only on the home screen, and only while the node is local Anvil.
+
+**Home.** ETH, mock dollars, and property shares. Empty until you fund and deploy. Recent activity is this page's own sends plus contract logs. On Anvil, click Fund from Anvil to take play ETH from the published textbook account. The button refuses any other chain.
+
+**Accounts.** Each row is `m/44'/60'/0'/0/i`. Use one of them. Copy copies the address. The QR code is the address, not the key. Show the locked fields and you can see scrypt and a ciphertext, and download `keystore.json`.
+
+**Send.** Type an address and an amount of ETH, then Review. The review is the transaction: chain id, nonce, gas, max fee, tip, and value, with the same explanation the command line prints. Sign and send broadcasts it. Pending means the node has it. Confirmed means it was mined. The hash is public. It is not a key.
+
+**Sign.** Preview shows the EIP-191 hash, the one with the "Ethereum Signed Message" prefix. Sign produces a signature. Check, on the right, needs the text, the signature, and an address. It does not use the network. Change one letter and it fails.
+
+**Vault.** Deploy creates the piggy bank. Deposit attaches ETH as the transaction value. Withdraw shows value 0, because the contract sends the ETH during the call. The three numbers are your ledger entry, the contract's own total, and the ETH the chain says the contract holds. Paste an address if you already deployed one with `npm run wallet -- contract deploy`.
+
+**Property.** Deploy is three reviews: the play dollar, the 1,000,000 shares, then a mint of play dollars. The page then shows the street, the document hash, and a box where changing one letter of the placeholder sentence makes the hash stop matching. The cap table is the holders and their percent of 1,000,000. Allow and Freeze are the manager's list. Transfer moves whole shares. Deposit rent is ETH (the value field) or mock dollars (an approval, then a deposit). Claim pays this account what its shares have earned. The chart is one bar per deposit, with ETH and mock dollars drawn separately because they are different units.
+
+**Learn.** The Learn button, and the lesson on the welcome screen, explains the idea on that screen in plain English: words, keys, gas, signatures, and why a share token is not a deed.
+
+**Light and dark.** The sun or moon in the top bar. The choice is remembered in this browser. It is not a secret.
+
+When you are done, Ctrl+C in the `npm run ui` window, and Ctrl+C in the Anvil window. The encrypted words remain until you forget them on the Accounts screen or clear the site's data in the browser.
+
 ## Map of the project
 
 | Path | What it is |
 | --- | --- |
-| `src/cli.ts` | Reads the command and calls the rest. Start here. |
+| `ui/` | The web app. `npm run ui` serves it on port 5173. It imports the wallet code instead of copying it. |
+| `src/cli.ts` | Reads the command and calls the rest. Start here if you want the terminal. |
 | `src/hd.ts` | Words, seed, and the path `m/44'/60'/0'/0/i`. |
 | `src/address.ts` | secp256k1 public key, keccak256, EIP-55. |
 | `src/keystore.ts` | scrypt + AES-GCM file format. |
@@ -563,7 +642,10 @@ npm run wallet -- property transfer --to 0x... --shares 250000
 npm run wallet -- property deposit-eth --eth 1
 npm run wallet -- property claimable
 npm run wallet -- property claim-eth
+npm run ui
+npm run ui:build
 npm test
+npm run lint
 npm run contracts:test
 npm run property:test
 ```

@@ -10,6 +10,7 @@
  * history. This program has no `--password` flag on purpose.
  */
 import readline from 'node:readline';
+import { assertFilePassword, assertPasswordsMatch } from './passwordRules.js';
 
 const NEED_TERMINAL =
   'This command needs an interactive terminal so secrets are not stored in a shell history file. ' +
@@ -110,17 +111,10 @@ export async function chooseFilePassword(mnemonic: string): Promise<string> {
   console.log('If you forget it, you can import the 12 words again. If you forget the words, the ETH is unrecoverable.');
 
   const first = await promptHidden('File password: ');
-  if (first.length < 8) {
-    throw new Error('Use at least 8 characters for the file password. Nothing was saved.');
-  }
-  if (first.normalize('NFC') === mnemonic.normalize('NFC')) {
-    throw new Error('The file password must be different from the 12 words. Nothing was saved.');
-  }
+  assertFilePassword(first, mnemonic);
 
   const second = await promptHidden('Type the same file password again: ');
-  if (first !== second) {
-    throw new Error('The two passwords did not match. Nothing was saved.');
-  }
+  assertPasswordsMatch(first, second);
   return first;
 }
 

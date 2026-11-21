@@ -30,7 +30,6 @@
  * hand is a common way to build a wallet that disagrees with every other
  * wallet, which is a polite way to say "the coins are gone".
  */
-import { randomBytes } from 'node:crypto';
 import { HDKey } from '@scure/bip32';
 import { entropyToMnemonic, mnemonicToSeedSync, validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english';
@@ -93,11 +92,24 @@ export function assertValidMnemonic(raw: string): string {
  * 132 bits into 12 groups of 11. Each group is an index into the 2048-word
  * English list (2^11 = 2048).
  *
- * `randomBytes` reads the OS CSPRNG (`/dev/urandom` on Linux). `Math.random`
- * is a predictable formula and must never be used for keys. We ask the
- * library to encode our bytes so this function, not a helper buried in a
- * dependency, is the place the entropy is created.
+ * `crypto.getRandomValues` reads the OS CSPRNG (`/dev/urandom` on Linux).
+ * Node and the browser both provide it, so the web app creates a phrase
+ * with this same function. `Math.random` is a predictable formula and must
+ * never be used for keys. We ask the library to encode our bytes so this
+ * function, not a helper buried in a dependency, is the place the entropy
+ * is created.
  */
+function randomBytes(size: number): Uint8Array {
+  const bytes = new Uint8Array(size);
+  const webcrypto = globalThis.crypto;
+  if (!webcrypto?.getRandomValues) {
+    throw new Error('This environment has no cryptographic random source. No phrase was created.');
+  }
+  webcrypto.getRandomValues(bytes);
+  return bytes;
+}
+
+/** 12 words from 16 bytes of operating-system randomness. See the note above. */
 export function createMnemonic(): string {
   const entropy = randomBytes(16);
   try {

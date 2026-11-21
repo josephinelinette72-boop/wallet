@@ -20,6 +20,7 @@ import path from 'node:path';
 import { KeystoreError, parseKeystore, type KeystoreFile } from './keystoreCrypto.js';
 
 export {
+  KEYSTORE_KEY_WARNING,
   KEYSTORE_SCRYPT,
   KEYSTORE_WARNING,
   KeystoreError,
@@ -27,9 +28,13 @@ export {
   decryptMnemonicAsync,
   encryptMnemonic,
   encryptMnemonicAsync,
+  encryptPrivateKey,
+  encryptPrivateKeyAsync,
+  keystoreSecretKind,
   parseKeystore,
   type EncryptOptions,
   type KeystoreFile,
+  type SecretKind,
 } from './keystoreCrypto.js';
 
 export function loadKeystore(filePath: string): KeystoreFile {

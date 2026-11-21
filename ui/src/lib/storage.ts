@@ -49,7 +49,7 @@ export type ActivityItem = {
 const DEFAULT_NETWORK: NetworkSettings = {
   choice: 'anvil',
   anvilUrl: 'http://127.0.0.1:8545',
-  sepoliaUrl: '',
+  sepoliaUrl: 'https://ethereum-sepolia-rpc.publicnode.com',
 };
 
 function readJson<T>(key: string, fallback: T): T {
@@ -72,7 +72,9 @@ export function saveTheme(theme: ThemeName): void {
 }
 
 export function loadNetwork(): NetworkSettings {
-  return readJson(NETWORK_KEY, DEFAULT_NETWORK);
+  const saved = readJson(NETWORK_KEY, DEFAULT_NETWORK);
+  if (!saved.sepoliaUrl.trim()) saved.sepoliaUrl = DEFAULT_NETWORK.sepoliaUrl;
+  return saved;
 }
 
 export function saveNetwork(settings: NetworkSettings): void {

@@ -38,11 +38,9 @@ import { formatEthDisplay, formatSharePercent, formatStableDisplay, holderSlice 
 import { useApp } from '../state';
 import { RentChart } from '../components/RentChart';
 import { Review, TxResult } from '../components/Review';
-import { Button, Card, Empty, Field, Note, Spinner, TextInput } from '../components/ui';
-import { deployVault } from '@wallet/vault';
-import { adminActionsAllowed, deployAllowed, propertyRole } from '@wallet/roles';
-import { LearnTip } from '../components/LearnTip';
+import { Button, Card, Empty, Field, HelpTip, Note, PageHeader, Spinner, TextInput } from '../components/ui';
 import { fetchBytecode } from '../lib/bytecode';
+import { SEPOLIA_REFERENCE } from '../lib/reference';
 import { readPropertyChain, type HolderRow, type RentPoint } from '../lib/chainReads';
 import { broadcastTransaction, type ReadyTransaction } from '../lib/broadcast';
 import { friendlyError } from '../lib/errors';
@@ -79,19 +77,6 @@ export function PropertyPage() {
   const [dollarRent, setDollarRent] = useState('1000');
   const [docText, setDocText] = useState(PLACEHOLDER_DOCUMENT);
 
-  // A vault deployment has no destination. Save that new address for this chain.
-  // Share transfers and rent deposits have a destination, so they do not match.
-  useEffect(() => {
-    if (tx.phase.step !== 'done' || tx.phase.status !== 'confirmed' || !tx.phase.contractAddress) return;
-    if (tx.phase.summary !== 'Deployed a LearningVault') return;
-    try {
-      const id = app.getConfig().chain.id;
-      app.rememberContracts(id, { vault: tx.phase.contractAddress });
-    } catch {
-      // The hash is on screen. The address can be pasted on the Vault page.
-    }
-  }, [tx.phase, app]);
-
   useEffect(() => {
     if (!unlocked || !book.property) {
       setOverview(null);
@@ -108,7 +93,9 @@ export function PropertyPage() {
           property: { address: property, source: 'this browser' },
           who: unlocked.address,
         });
-        const extras = Array.from({ length: unlocked.accountCount }, (_, index) => accountAt(index).address);
+        const extras = unlocked.kind === 'private-key'
+          ? [unlocked.address]
+          : Array.from({ length: unlocked.accountCount }, (_, index) => accountAt(index).address);
         const chain = await readPropertyChain({
           config,
           property,
@@ -145,8 +132,8 @@ export function PropertyPage() {
         account: signer.account,
         path: signer.path,
         data: encodeStablecoinDeploy(signer.address, undefined, bytecode),
-        action: 'Deploy MockStablecoin, the play dollar for the rent lesson',
-        note: 'The deployer becomes the only address that can mint. A real dollar does not work this way. This token is a prop.',
+        action: 'Deploy the stablecoin used for rent',
+        note: 'The deployer is the only address that can mint.',
       });
       setDeploy({ step: 'review', which: 'stable', ready });
     } catch (caught) {
@@ -182,7 +169,7 @@ export function PropertyPage() {
         chainId: config.chain.id,
         from: unlocked.address,
         kind: `deploy-${current.which}`,
-        summary: current.which === 'mint' ? 'Minted mock dollars' : `Deployed ${current.which === 'stable' ? 'the play dollar' : 'the property shares'}`,
+        summary: current.which === 'mint' ? 'Minted stablecoin' : `Deployed ${current.which === 'stable' ? 'the stablecoin' : 'the property shares'}`,
         status: 'confirmed',
         createdAt: new Date().toISOString(),
       });
@@ -190,15 +177,15 @@ export function PropertyPage() {
       if (current.which === 'stable') {
         const stable = receipt.contractAddress
           ?? getContractAddress({ from: signer.address, nonce: BigInt(current.ready.fields.nonce) });
-        if (!stable) throw new Error('The play dollar deployment did not leave an address.');
+        if (!stable) throw new Error('The stablecoin deployment did not leave an address.');
         const propertyCode = await fetchBytecode('PropertyShare');
         const ready = await prepareDeploy({
           config,
           account: signer.account,
           path: signer.path,
           data: encodePropertyDeploy({ stablecoin: stable, admin: signer.address, bytecode: propertyCode }),
-          action: 'Deploy PropertyShare and mint 1,000,000 shares to you',
-          note: `You are the admin, the manager, and the first shareholder.\nDocument hash: ${PLACEHOLDER_DOCUMENT_HASH}\nThat hash is keccak256 of a sentence that says there is no deed. It is not a deed.`,
+          action: 'Deploy PropertyShare and mint 1,000,000 shares to this account',
+          note: `This account is the admin, the manager, and the first shareholder.\nDocument hash: ${PLACEHOLDER_DOCUMENT_HASH}`,
         });
         setDeploy({ step: 'review', which: 'property', ready, stable });
         return;
@@ -217,8 +204,8 @@ export function PropertyPage() {
           to: stable,
           data: encodeMintStable(signer.address, PLAY_DOLLARS_BASE_UNITS),
           valueWei: 0n,
-          action: 'Mint 1,000,000 mock dollars to yourself, so you can practice a stablecoin rent deposit',
-          note: 'Value is 0. The new tokens are created inside the call. 1,000,000 dollars with 6 decimals is 1,000,000,000,000 base units.',
+          action: 'Mint 1,000,000 stablecoin units to this account',
+          note: 'Value is 0. The tokens are created inside the call. 1,000,000 units with 6 decimals is 1,000,000,000,000 base units.',
           simulate: () =>
             makePublicClient(config).simulateContract({
               address: stable,
@@ -257,34 +244,15 @@ export function PropertyPage() {
     }
   }
 
-  const role = propertyRole({
-    propertyDeployed: Boolean(overview),
-    youAreManager: Boolean(overview?.youAreManager),
-  });
-  const showForms =
-    (tx.phase.step === 'form' || tx.phase.step === 'error' || tx.phase.step === 'preparing') &&
-    adminActionsAllowed(role);
-  async function deployVaultHere() {
-    if (!unlocked || !deployAllowed(role)) return;
-    await tx.review(async () => {
-      const config = app.getConfig();
-      const signer = accountAt(unlocked.index);
-      const bytecode = await fetchBytecode('LearningVault');
-      return deployVault({ config, account: signer.account, path: signer.path, bytecode });
-    }, 'Deployed a LearningVault');
-  }
+  const showForms = tx.phase.step === 'form' || tx.phase.step === 'error' || tx.phase.step === 'preparing';
   const docHash = keccak256(stringToHex(docText));
   const docMatches = overview ? docHash.toLowerCase() === overview.documentHash.toLowerCase() : false;
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="font-serif text-4xl">Admin</h1>
-        <p className="max-w-2xl text-sm text-muted">
-          Manager tools for this rental. Investors use the Investor tab. There is no building behind these shares.
-        </p>
-      </div>
-      <LearnTip topic="property" />
+      <PageHeader kicker="Operator" title="Admin">
+        <HelpTip text="Allowlist, share transfers, and rent deposits. Investor claims are on Overview." />
+      </PageHeader>
       {error ? <Note tone="bad">{error}</Note> : null}
       {loading ? <Spinner label="Reading the property…" /> : null}
 
@@ -292,7 +260,7 @@ export function PropertyPage() {
         <Review preview={deploy.ready.preview} busy={false} onBack={() => setDeploy({ step: 'idle' })} onConfirm={() => void confirmDeploy()} />
       ) : null}
       {deploy.step === 'pending' ? (
-        <TxResult status="pending" hash={deploy.hash} onDone={() => setDeploy({ step: 'idle' })} note={`Step: ${deploy.which}. Deployment is three signatures: play dollar, shares, then a mint.`} />
+        <TxResult status="pending" hash={deploy.hash} onDone={() => setDeploy({ step: 'idle' })} note={`Step: ${deploy.which}. Deployment is three signatures: stablecoin, shares, then a mint.`} />
       ) : null}
       {deploy.step === 'error' ? <Note tone="bad">{deploy.message}</Note> : null}
       {deploy.step === 'busy' ? <Spinner label={deploy.label} /> : null}
@@ -301,15 +269,27 @@ export function PropertyPage() {
       {tx.phase.step === 'pending' ? <TxResult status="pending" hash={tx.phase.hash} onDone={tx.reset} /> : null}
       {tx.phase.step === 'done' ? <TxResult status={tx.phase.status} hash={tx.phase.hash} onDone={tx.reset} /> : null}
 
-      {!overview && deploy.step === 'idle' && deployAllowed(role) ? (
+      {!overview && !loading && deploy.step === 'idle' ? (
         <Card className="space-y-3">
-          <h2 className="font-serif text-2xl">1. Deploy contracts</h2>
-          <Empty title="No property on this chain yet">
-            Deploy the play dollar, then the shares. This account becomes the manager. Compile first with npm run
-            property:build. You need play ETH for the fees.
+          <Empty title="No property on this network">
+            Deploy the stablecoin and the share token from this page, or paste addresses. Compile first with npm run
+            property:build. This account needs ETH for the fees.
           </Empty>
-          <Button onClick={() => void startDeploy()}>Deploy play dollar and shares</Button>
-          <Button tone="quiet" onClick={() => void deployVaultHere()}>Deploy the vault</Button>
+          {chainId === SEPOLIA_REFERENCE.chainId ? (
+            <Button
+              onClick={() => {
+                app.rememberContracts(chainId, {
+                  property: SEPOLIA_REFERENCE.property,
+                  stablecoin: SEPOLIA_REFERENCE.stablecoin,
+                  vault: SEPOLIA_REFERENCE.vault,
+                });
+                setError(null);
+              }}
+            >
+              Load Sepolia reference
+            </Button>
+          ) : null}
+          <Button onClick={() => void startDeploy()}>Review the first deployment</Button>
           <Field label="PropertyShare address">
             <TextInput value={pasteProperty} onChange={(event) => setPasteProperty(event.target.value)} className="font-mono" spellCheck={false} />
           </Field>
@@ -320,54 +300,35 @@ export function PropertyPage() {
         </Card>
       ) : null}
 
-      {overview && !adminActionsAllowed(role) ? (
-        <Card className="space-y-3">
-          <h2 className="font-serif text-3xl">You are not the admin</h2>
-          <p className="text-sm leading-relaxed text-muted">
-            This account is not the manager of {overview.propertyName}. The contract rejects allowlist changes, share
-            gifts, and rent deposits from anyone else. Switch to the manager account in the top bar, or open Investor
-            to see your shares and claim rent.
-          </p>
-          <Button onClick={() => app.setPage('investor')}>Open the investor view</Button>
-        </Card>
-      ) : null}
-
-      {overview && adminActionsAllowed(role) ? (
+      {overview ? (
         <>
-          <Card className="space-y-2">
-            <h2 className="font-serif text-2xl">Contracts</h2>
-            <p className="break-all font-mono text-xs text-muted">Shares {overview.address}</p>
-            <p className="break-all font-mono text-xs text-muted">Play dollar {overview.stablecoin}</p>
-            <Button tone="quiet" onClick={() => void deployVaultHere()}>Deploy the vault</Button>
-          </Card>
           <div className="grid gap-3 md:grid-cols-2">
             <Card>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted">{overview.symbol}</p>
-              <h2 className="font-serif text-3xl">{overview.propertyName}</h2>
+              <h2 className="text-xl font-semibold tracking-tight">{overview.propertyName}</h2>
               <p className="mt-1 text-sm text-muted">{overview.streetAddress}</p>
               <p className="mt-3 text-sm">{overview.tokenName}. Supply {overview.totalSupply.toString()} shares, 0 decimals.</p>
               <p className="mt-2 break-all font-mono text-xs text-muted">{overview.address}</p>
             </Card>
             <Card>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted">Your position</p>
-              <p className="num mt-2 font-serif text-3xl">{formatSharePercent(overview.yourShares, overview.totalSupply)}</p>
+              <p className="num mt-2 text-2xl font-semibold tracking-tight">{formatSharePercent(overview.yourShares, overview.totalSupply)}</p>
               <p className="text-sm text-muted">{overview.yourShares.toString()} shares</p>
               <p className="mt-3 text-sm">Claimable ETH: {formatEthDisplay(overview.claimableEthWei)}</p>
               <p className="text-sm">Claimable {overview.stableSymbol}: {formatStableDisplay(overview.claimableStableBase, overview.stableSymbol)}</p>
               <p className="mt-2 text-xs text-muted">
-                {overview.youAreManager ? 'This account is a manager, so it may deposit rent and edit the allowlist.' : 'This account is not a manager. Deposit and allowlist buttons will be rejected by the contract.'}
+                {overview.youAreManager ? 'Manager. Allowlist and rent deposits are enabled.' : 'Not a manager. Allowlist and rent deposits will be rejected.'}
                 {' '}
-                {overview.youAllowed ? 'It is on the allowlist.' : 'It is not on the allowlist, so shares cannot move to or from it.'}
+                {overview.youAllowed ? 'On the allowlist.' : 'Not on the allowlist, so shares cannot move.'}
               </p>
             </Card>
           </div>
 
           <Card className="space-y-3">
-            <h2 className="font-serif text-2xl">2. Property details</h2>
-            <p className="text-sm leading-relaxed text-muted">
-              The contract stores keccak256 of a text, not a PDF. The stored URI is {overview.documentUri}. Edit one
-              character below and the hash stops matching. That is the whole lesson of the hash. It does not check a deed.
-            </p>
+            <h2 className="flex items-center gap-2 text-lg font-semibold">
+              Document
+              <HelpTip text={`The contract stores keccak256 of this text. URI: ${overview.documentUri}. Changing one character makes the hash stop matching.`} />
+            </h2>
             <textarea
               className="min-h-24 w-full rounded-2xl border border-line bg-card-2 p-3 text-sm"
               value={docText}
@@ -380,10 +341,10 @@ export function PropertyPage() {
           </Card>
 
           <Card>
-            <h2 className="font-serif text-2xl">Who holds shares</h2>
-            <p className="mt-1 text-sm text-muted">
-              Built from Transfer events, then a balance read for each address. The contract does not keep a list of holders.
-            </p>
+            <h2 className="flex items-center gap-2 text-lg font-semibold">
+              Holders
+              <HelpTip text="Built from Transfer events, then a balance read. The contract does not keep a holder list." />
+            </h2>
             {holders.length === 0 ? (
               <div className="mt-3">
                 <Empty title="No holders found in the recent logs">Your balance above is still a direct read.</Empty>
@@ -412,8 +373,10 @@ export function PropertyPage() {
           {showForms ? (
             <div className="grid gap-3 lg:grid-cols-2">
               <Card className="space-y-3">
-                <h2 className="font-serif text-2xl">3. Allowlist</h2>
-                <p className="text-sm text-muted">Add an investor so they can hold shares. Remove them to freeze the shares they already hold.</p>
+                <h2 className="flex items-center gap-2 text-lg font-semibold">
+                  Allowlist
+                  <HelpTip text="Both sides of a transfer must be allowed. Freeze keeps the shares in place. It does not seize them." />
+                </h2>
                 {tx.phase.step === 'error' ? <Note tone="bad">{tx.phase.message}</Note> : null}
                 <Field label="Address">
                   <TextInput value={allowAddress} onChange={(event) => setAllowAddress(event.target.value)} className="font-mono" spellCheck={false} />
@@ -433,7 +396,7 @@ export function PropertyPage() {
                         data: encodeSetAllowed(who, true),
                         valueWei: 0n,
                         action: 'Allow an address to hold shares',
-                        note: 'This is the classroom stand-in for a transfer restriction. It is not an identity check.',
+                        note: 'The recipient must be allowed before shares can move.',
                         simulate: () => makePublicClient(config).simulateContract({
                           address: overview.address,
                           abi: propertyShareAbi,
@@ -444,7 +407,7 @@ export function PropertyPage() {
                       });
                     })}
                   >
-                    Add investor
+                    Allow
                   </Button>
                   <Button
                     tone="quiet"
@@ -472,14 +435,14 @@ export function PropertyPage() {
                       });
                     })}
                   >
-                    Remove investor
+                    Freeze
                   </Button>
                 </div>
               </Card>
 
               <Card className="space-y-3">
-                <h2 className="font-serif text-2xl">4. Give shares</h2>
-                <p className="text-sm text-muted">Whole shares only. 250000 is 25%. The recipient must already be on the allowlist.</p>
+                <h2 className="text-lg font-semibold">Transfer shares</h2>
+                <p className="text-sm text-muted">Whole shares only. 250000 is 25% of supply. The recipient must already be allowed.</p>
                 <Field label="To">
                   <TextInput value={transferTo} onChange={(event) => setTransferTo(event.target.value)} className="font-mono" spellCheck={false} />
                 </Field>
@@ -511,16 +474,15 @@ export function PropertyPage() {
                     });
                   }, `${shares} shares`)}
                 >
-                  Give these shares
+                  Review transfer
                 </Button>
               </Card>
 
               <Card className="space-y-3">
-                <h2 className="font-serif text-2xl">5. Deposit rent</h2>
-                <p className="text-sm text-muted">
-                  ETH rides in the transaction value. Mock dollars need an approval first, because an ERC-20 will not
-                  let this contract pull tokens until you say it may. Only a manager can deposit.
-                </p>
+                <h2 className="flex items-center gap-2 text-lg font-semibold">
+                  Deposit rent
+                  <HelpTip text="ETH is the transaction value. Stablecoin rent needs an approval first. Only a manager can deposit." />
+                </h2>
                 <Field label="ETH rent">
                   <TextInput value={ethRent} onChange={(event) => setEthRent(event.target.value)} inputMode="decimal" />
                 </Field>
@@ -551,7 +513,7 @@ export function PropertyPage() {
                 >
                   Review ETH rent
                 </Button>
-                <Field label={`Mock dollars (${overview.stableSymbol})`}>
+                <Field label={`${overview.stableSymbol}`}>
                   <TextInput value={dollarRent} onChange={(event) => setDollarRent(event.target.value)} inputMode="decimal" />
                 </Field>
                 <div className="flex flex-wrap gap-2">
@@ -613,12 +575,11 @@ export function PropertyPage() {
                 </div>
               </Card>
 
-              <Card className="hidden space-y-3">
-                <h2 className="font-serif text-2xl">Claim</h2>
-                <p className="text-sm text-muted">
-                  A claim pays this account what its shares have earned. The books update before the money moves. The
-                  transaction value is 0. The fee is still yours to pay.
-                </p>
+              <Card className="space-y-3">
+                <h2 className="flex items-center gap-2 text-lg font-semibold">
+                  Claim
+                  <HelpTip text="Pays this account the rent its shares have earned. Transaction value is 0. The fee is still paid in ETH." />
+                </h2>
                 <Button
                   disabled={overview.claimableEthWei === 0n}
                   onClick={() => void runAction('Claimed ETH rent', async () => {
@@ -675,14 +636,14 @@ export function PropertyPage() {
           ) : null}
 
           <Card>
-            <h2 className="font-serif text-2xl">Rent history</h2>
+            <h2 className="text-lg font-semibold">Rent history</h2>
             <div className="mt-3">
               <RentChart points={rent} />
             </div>
             <p className="mt-4 text-xs text-muted">
-              Deposited {formatEthDisplay(overview.ethDepositedWei)} ETH, claimed {formatEthDisplay(overview.ethClaimedWei)}.
-              Mock dollars deposited {formatStableDisplay(overview.stableDepositedBase, overview.stableSymbol)}, claimed {formatStableDisplay(overview.stableClaimedBase, overview.stableSymbol)}.
-              The contract holds {formatEthDisplay(overview.contractEthWei)} ETH right now.
+              Deposited {formatEthDisplay(overview.ethDepositedWei)}, claimed {formatEthDisplay(overview.ethClaimedWei)}.
+              Stablecoin deposited {formatStableDisplay(overview.stableDepositedBase, overview.stableSymbol)}, claimed {formatStableDisplay(overview.stableClaimedBase, overview.stableSymbol)}.
+              The contract holds {formatEthDisplay(overview.contractEthWei)} right now.
             </p>
           </Card>
         </>

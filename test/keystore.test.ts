@@ -7,11 +7,24 @@ import { chmodSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { KEYSTORE_SCRYPT, decryptMnemonic, encryptMnemonic, parseKeystore, saveKeystore } from '../src/keystore.js';
+import { recoverMessageAddress } from 'viem';
+import { addressFromPrivateKey, parsePrivateKey } from '../src/address.js';
+import { accountFromPrivateKey, accountFromSecret } from '../src/account.js';
+import {
+  KEYSTORE_SCRYPT,
+  decryptMnemonic,
+  encryptMnemonic,
+  encryptPrivateKey,
+  encryptPrivateKeyAsync,
+  parseKeystore,
+  saveKeystore,
+} from '../src/keystore.js';
 
 const PHRASE =
   'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
 const PASSWORD = 'test-password';
+const RAW_KEY = '0x1ab42cc412b618bdea3a599e3c9bae199ebf030895b039e9db1e30dafb12b727';
+const RAW_ADDRESS = '0x9858EfFD232B4033E47d90003D41EC34EcaEda94';
 const PASSPHRASE = 'correct horse';
 
 test('default scrypt N is 2^14', () => {
@@ -131,4 +144,41 @@ test('reordering JSON keys still decrypts, because the tag is bound to values no
   const filePath = path.join(directory, 'keystore.json');
   writeFileSync(filePath, JSON.stringify(reordered));
   assert.equal(decryptMnemonic(parseKeystore(JSON.parse(readFileSync(filePath, 'utf8'))), PASSWORD), PHRASE);
+});
+
+test('a raw private key round-trips in the same lock and is not written in the clear', async () => {
+  const file = encryptPrivateKey(RAW_KEY.toUpperCase(), PASSWORD, { n: 1024 });
+  const json = JSON.stringify(file);
+  assert.equal(file.secret, 'private-key');
+  assert.equal(file.usesPassphrase, false);
+  assert.equal(json.includes(RAW_KEY.slice(2)), false);
+  assert.equal(json.includes(PASSWORD), false);
+  assert.equal(decryptMnemonic(file, PASSWORD), RAW_KEY);
+  assert.equal(decryptMnemonic(parseKeystore(JSON.parse(json)), PASSWORD), RAW_KEY);
+
+  const asyncFile = await encryptPrivateKeyAsync(`  ${RAW_KEY}  `, PASSWORD, { n: 1024 });
+  assert.equal(decryptMnemonic(asyncFile, PASSWORD), RAW_KEY);
+
+  const unlocked = accountFromPrivateKey(decryptMnemonic(file, PASSWORD) as `0x${string}`);
+  assert.equal(unlocked.address, RAW_ADDRESS);
+  assert.equal(unlocked.path, 'raw key');
+  const signature = await unlocked.account.signMessage({ message: 'rent' });
+  assert.equal(await recoverMessageAddress({ message: 'rent', signature }), RAW_ADDRESS);
+
+  assert.throws(() => accountFromSecret({ kind: 'private-key', privateKey: RAW_KEY }, 1), /one private key/);
+  assert.equal(accountFromSecret({ kind: 'private-key', privateKey: RAW_KEY }, 0).address, RAW_ADDRESS);
+});
+
+test('a private key is rejected unless it is 0x and on the curve, and the password cannot be the key', () => {
+  assert.throws(() => parsePrivateKey(RAW_KEY.slice(2)), /start with 0x/);
+  assert.throws(() => parsePrivateKey(`${RAW_KEY}aa`), /64 hex/);
+  assert.throws(() => parsePrivateKey(`0x${'00'.repeat(32)}`), /not a valid secp256k1/);
+  assert.throws(() => encryptPrivateKey(RAW_KEY, RAW_KEY, { n: 1024 }), /different from the private key/);
+  assert.throws(() => encryptPrivateKey(RAW_KEY, PASSWORD, { n: 1024, usesPassphrase: true }), /passphrase/);
+
+  const file = encryptPrivateKey(RAW_KEY, PASSWORD, { n: 1024 });
+  const flipped = { ...file, secret: undefined };
+  assert.throws(() => decryptMnemonic(parseKeystore(flipped), PASSWORD));
+  assert.throws(() => parseKeystore({ ...file, secret: 'mnemonic' }), /secret type/);
+  assert.equal(addressFromPrivateKey(Uint8Array.from(Buffer.from(RAW_KEY.slice(2), 'hex'))), RAW_ADDRESS);
 });

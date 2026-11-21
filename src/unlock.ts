@@ -30,6 +30,11 @@ export async function withMnemonic<T>(
   }
 
   const file = loadKeystore(filePath);
+  if (file.secret === 'private-key') {
+    throw new Error(
+      'This keystore holds one private key, not a recovery phrase. The command line opens phrase wallets. Use the web app to unlock this file.',
+    );
+  }
   console.log(`Keystore: ${filePath}`);
   console.log('The file password decrypts the words on this computer. It is not sent to the network.');
   console.log('Running scrypt next. A short pause is the password stretching doing its job.');

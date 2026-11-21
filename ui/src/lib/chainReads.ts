@@ -229,9 +229,9 @@ export async function readHistory(input: {
         });
       }
     }
-  } catch (error) {
-    // A missing node should not hide the notebook of sends we already stored.
-    if (local.length === 0) throw toFriendlyError(error, input.config);
+  } catch {
+    // A missing node, or a public node that pruned older logs, should not hide
+    // the notebook of sends already stored. Direct balance reads still work.
   }
 
   return [...byHash.values()].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)).slice(0, 12);
@@ -251,13 +251,13 @@ export type HolderRow = {
   allowed: boolean;
 };
 
-/** One rent payout to one holder. The investor chart is a list of these. */
-export type ClaimPoint = {
+export type ClaimRow = {
   hash: Hash;
   holder: Address;
   asset: 'eth' | 'stable';
   amount: bigint;
   label: string;
+  when: string;
 };
 
 export async function readPropertyChain(input: {
@@ -265,14 +265,34 @@ export async function readPropertyChain(input: {
   property: Address;
   stablecoin: Address;
   extraAddresses: Address[];
-}): Promise<{ holders: HolderRow[]; rent: RentPoint[]; claims: ClaimPoint[]; seen: Address[] }> {
+}): Promise<{ holders: HolderRow[]; rent: RentPoint[]; claims: ClaimRow[]; seen: Address[]; logError: string | null }> {
   const client = makePublicClient(input.config);
   const latest = await client.getBlockNumber();
-  const span = input.config.chainChoice === 'anvil' ? latest : latest > 50_000n ? 50_000n : latest;
-  const fromBlock = latest - span;
+  const spans = input.config.chainChoice === 'anvil' ? [latest] : [8_000n, 2_000n, 500n];
 
-  const [transfers, allowedLogs, rentLogs, claimLogs] = await Promise.all([
-    client.getLogs({ address: input.property, event: transferEvent, fromBlock, toBlock: 'latest' }),
+  let fromBlock = latest;
+  let transfers: Awaited<ReturnType<typeof client.getLogs<typeof transferEvent>>> | null = null;
+  for (const span of spans) {
+    fromBlock = latest > span ? latest - span : 0n;
+    try {
+      transfers = await client.getLogs({ address: input.property, event: transferEvent, fromBlock, toBlock: 'latest' });
+      break;
+    } catch {
+      transfers = null;
+    }
+  }
+
+  if (!transfers) {
+    return {
+      holders: [],
+      rent: [],
+      claims: [],
+      seen: input.extraAddresses,
+      logError: 'This node did not return contract logs. Balances above are direct reads.',
+    };
+  }
+
+  const [allowedLogs, rentLogs, claimLogs] = await Promise.all([
     client.getLogs({ address: input.property, event: allowedSetEvent, fromBlock, toBlock: 'latest' }),
     client.getLogs({ address: input.property, event: rentDepositedEvent, fromBlock, toBlock: 'latest' }),
     client.getLogs({ address: input.property, event: rentClaimedEvent, fromBlock, toBlock: 'latest' }),
@@ -302,8 +322,27 @@ export async function readPropertyChain(input: {
     });
   }
 
-  // A handful of deposits. One block lookup each is enough for a chart.
-  for (const point of rent) {
+  const claims: ClaimRow[] = [];
+  for (const log of claimLogs) {
+    if (!log.transactionHash || !log.args.holder || log.args.amount === undefined || !log.args.asset) continue;
+    const asset = log.args.asset.toLowerCase() === zeroAddress ? 'eth' : 'stable';
+    claims.push({
+      hash: log.transactionHash,
+      holder: log.args.holder,
+      asset,
+      amount: log.args.amount,
+      label: asset === 'eth' ? `${formatEther(log.args.amount)} ETH` : `${formatUnits(log.args.amount, 6)} mUSD`,
+      when: '',
+    });
+  }
+
+  const dated = [...rent, ...claims];
+  const seenBlocks = new Map<string, string>();
+  for (const point of dated) {
+    if (seenBlocks.has(point.hash)) {
+      point.when = seenBlocks.get(point.hash) ?? '';
+      continue;
+    }
     const tx = await client.getTransaction({ hash: point.hash });
     const block = await client.getBlock({ blockNumber: tx.blockNumber ?? latest });
     point.when = new Date(Number(block.timestamp) * 1000).toLocaleString(undefined, {
@@ -312,19 +351,7 @@ export async function readPropertyChain(input: {
       hour: 'numeric',
       minute: '2-digit',
     });
-  }
-
-  const claims: ClaimPoint[] = [];
-  for (const log of claimLogs) {
-    if (!log.transactionHash || !log.args.holder || log.args.amount === undefined || !log.args.asset) continue;
-    const asset = log.args.asset.toLowerCase() === zeroAddress ? 'eth' : 'stable';
-    claims.push({
-      hash: log.transactionHash,
-      holder: getAddress(log.args.holder),
-      asset,
-      amount: log.args.amount,
-      label: asset === 'eth' ? `${formatEther(log.args.amount)} ETH` : `${formatUnits(log.args.amount, 6)} mUSD`,
-    });
+    seenBlocks.set(point.hash, point.when);
   }
 
   const holders: HolderRow[] = [];
@@ -353,6 +380,7 @@ export async function readPropertyChain(input: {
     rent,
     claims,
     seen: [...addresses] as Address[],
+    logError: null,
   };
 }
 

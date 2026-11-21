@@ -5,20 +5,19 @@
  * CLI does too.
  */
 import { useState } from 'react';
-import { BookOpen } from 'lucide-react';
 import { useApp } from '../state';
-import { LearnDrawer } from '../components/LearnDrawer';
-import { Banner, Button, Card, Field, Note, Spinner, TextInput } from '../components/ui';
+import { Button, Card, Field, Note, PageHeader, Spinner, TestnetBadge, TextInput } from '../components/ui';
 import { friendlyError } from '../lib/errors';
 
 export function Unlock() {
   const app = useApp();
-  const usesPassphrase = app.wallet.status === 'locked' && app.wallet.usesPassphrase;
+  const locked = app.wallet.status === 'locked' ? app.wallet : null;
+  const usesPassphrase = Boolean(locked?.usesPassphrase);
+  const keyOnly = locked?.kind === 'private-key';
   const [password, setPassword] = useState('');
   const [passphrase, setPassphrase] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [learnOpen, setLearnOpen] = useState(false);
 
   async function submit() {
     setError(null);
@@ -35,21 +34,16 @@ export function Unlock() {
 
   return (
     <div className="min-h-screen">
-      <Banner />
       <main className="mx-auto flex max-w-lg flex-col gap-4 px-4 py-10">
         <div className="flex items-start justify-between">
-          <div>
-            <p className="text-sm font-semibold text-moss">Learning wallet</p>
-            <h1 className="font-serif text-4xl">Unlock</h1>
-          </div>
-          <Button tone="quiet" onClick={() => setLearnOpen(true)}>
-            <BookOpen size={16} /> Learn
-          </Button>
+          <PageHeader kicker="PropertyShare" title="Unlock" />
+          <TestnetBadge />
         </div>
         <Card className="space-y-4">
           <Note>
-            The file password decrypts the words on this computer. It is not sent to the network. A short pause is the
-            password stretching doing its job.
+            {keyOnly
+              ? 'The file password decrypts the private key on this computer. It is not sent to the network. A short pause is the password stretching doing its job.'
+              : 'The file password decrypts the recovery phrase on this computer. It is not sent to the network. A short pause is the password stretching doing its job.'}
           </Note>
           {error ? <Note tone="bad">{error}</Note> : null}
           <Field label="File password">
@@ -74,7 +68,6 @@ export function Unlock() {
           </Button>
         </Card>
       </main>
-      <LearnDrawer topic="welcome" open={learnOpen} onClose={() => setLearnOpen(false)} />
     </div>
   );
 }

@@ -33,6 +33,7 @@
  */
 import { gcm } from '@noble/ciphers/aes.js';
 import { scrypt, scryptAsync } from '@noble/hashes/scrypt.js';
+import { parsePrivateKey } from './address.js';
 import { assertValidMnemonic } from './hd.js';
 
 export const KEYSTORE_SCRYPT = {
@@ -44,6 +45,11 @@ export const KEYSTORE_SCRYPT = {
 
 export const KEYSTORE_WARNING =
   'Encrypted BIP-39 mnemonic for the learning wallet. Not plaintext. NEVER use a real-funds seed with this file.';
+
+export const KEYSTORE_KEY_WARNING =
+  'Encrypted hex private key. Not plaintext. NEVER use a real-funds key with this file.';
+
+export type SecretKind = 'mnemonic' | 'private-key';
 
 const MIN_N = 2 ** 10;
 const MAX_N = 2 ** 18;
@@ -79,7 +85,17 @@ export type KeystoreFile = {
   ciphertext: string;
   usesPassphrase: boolean;
   createdAt: string;
+  /**
+   * Omitted for a BIP-39 phrase, including every file written before raw keys
+   * existed. Present only when the ciphertext is a 0x private key. The value
+   * is covered by the GCM tag, so flipping it makes the file refuse to open.
+   */
+  secret?: 'private-key';
 };
+
+export function keystoreSecretKind(file: Pick<KeystoreFile, 'secret'>): SecretKind {
+  return file.secret === 'private-key' ? 'private-key' : 'mnemonic';
+}
 
 export type EncryptOptions = {
   /** Override scrypt N. Tests pass a smaller power of two. The CLI and the page do not. */
@@ -135,7 +151,7 @@ function readHex(value: unknown, expectedBytes: number | undefined, label: strin
  * change the tag. The password and the words are not included: this string
  * is rebuilt from fields anyone can read.
  */
-function aadBytes(file: Pick<KeystoreFile, 'version' | 'warning' | 'kdf' | 'kdfparams' | 'cipher' | 'cipherparams' | 'usesPassphrase' | 'createdAt'>): Uint8Array {
+function aadBytes(file: Pick<KeystoreFile, 'version' | 'warning' | 'kdf' | 'kdfparams' | 'cipher' | 'cipherparams' | 'usesPassphrase' | 'createdAt' | 'secret'>): Uint8Array {
   const lines = [
     `version=${file.version}`,
     `warning=${file.warning}`,
@@ -150,6 +166,9 @@ function aadBytes(file: Pick<KeystoreFile, 'version' | 'warning' | 'kdf' | 'kdfp
     `usesPassphrase=${file.usesPassphrase ? 'yes' : 'no'}`,
     `createdAt=${file.createdAt}`,
   ];
+  // Phrase files keep the original tag input. A private-key file adds one
+  // line, so an old file and a new phrase file still open unchanged.
+  if (file.secret === 'private-key') lines.push('secret=private-key');
   return textEncoder.encode(lines.join('\n'));
 }
 
@@ -225,6 +244,9 @@ export function parseKeystore(value: unknown): KeystoreFile {
   if (typeof value.warning !== 'string' || typeof value.createdAt !== 'string') {
     throw new KeystoreError('The keystore header is incomplete. Nothing was unlocked.');
   }
+  if (value.secret !== undefined && value.secret !== 'private-key') {
+    throw new KeystoreError('The keystore secret type is not one this wallet writes. Nothing was unlocked.');
+  }
   if (!isRecord(value.kdfparams) || !isRecord(value.cipherparams)) {
     throw new KeystoreError('The keystore is missing its cipher parameters. Nothing was unlocked.');
   }
@@ -267,10 +289,11 @@ export function parseKeystore(value: unknown): KeystoreFile {
     ciphertext: toHex(ciphertext),
     usesPassphrase: value.usesPassphrase,
     createdAt: value.createdAt,
+    ...(value.secret === 'private-key' ? { secret: 'private-key' as const } : {}),
   };
 }
 
-function blankFile(options: EncryptOptions): { file: KeystoreFile; n: number } {
+function blankFile(options: EncryptOptions, warning = KEYSTORE_WARNING): { file: KeystoreFile; n: number } {
   const n = options.n ?? KEYSTORE_SCRYPT.n;
   assertPowerOfTwoN(n);
   // A new salt and a new IV every time. Reusing an IV with the same key
@@ -279,7 +302,7 @@ function blankFile(options: EncryptOptions): { file: KeystoreFile; n: number } {
   const iv = randomBytes(IV_BYTES);
   const file: KeystoreFile = {
     version: 1,
-    warning: KEYSTORE_WARNING,
+    warning,
     kdf: 'scrypt',
     kdfparams: {
       n,
@@ -342,6 +365,61 @@ export async function encryptMnemonicAsync(
   });
   try {
     seal(file, key, normalized);
+    return file;
+  } finally {
+    key.fill(0);
+    secret.fill(0);
+  }
+}
+
+function assertKeyNotPassword(privateKey: string, password: string): void {
+  const key = privateKey.toLowerCase().replace(/^0x/, '');
+  const typed = password.normalize('NFC').toLowerCase().replace(/^0x/, '');
+  if (typed === key) {
+    throw new KeystoreError('The file password must be different from the private key. Nothing was saved.');
+  }
+}
+
+function sealPrivateKey(privateKey: string, password: string, options: EncryptOptions): { file: KeystoreFile; n: number; plain: string } {
+  const normalized = parsePrivateKey(privateKey);
+  assertPassword(password);
+  assertKeyNotPassword(normalized, password);
+  if (options.usesPassphrase) {
+    throw new KeystoreError('A raw private key does not use a BIP-39 passphrase. Nothing was saved.');
+  }
+  const { file, n } = blankFile({ ...options, usesPassphrase: false }, KEYSTORE_KEY_WARNING);
+  file.secret = 'private-key';
+  return { file, n, plain: normalized };
+}
+
+/** Same scrypt + AES-GCM lock as a phrase, with the hex key as the plaintext. */
+export function encryptPrivateKey(privateKey: string, password: string, options: EncryptOptions = {}): KeystoreFile {
+  const { file, n, plain } = sealPrivateKey(privateKey, password, options);
+  const secret = passwordBytes(password);
+  const key = scrypt(secret, fromHex(file.kdfparams.salt), scryptOptions(n));
+  try {
+    seal(file, key, plain);
+    return file;
+  } finally {
+    key.fill(0);
+    secret.fill(0);
+  }
+}
+
+export async function encryptPrivateKeyAsync(
+  privateKey: string,
+  password: string,
+  options: EncryptOptions = {},
+  onProgress?: (progress: number) => void,
+): Promise<KeystoreFile> {
+  const { file, n, plain } = sealPrivateKey(privateKey, password, options);
+  const secret = passwordBytes(password);
+  const key = await scryptAsync(secret, fromHex(file.kdfparams.salt), {
+    ...scryptOptions(n, onProgress),
+    asyncTick: 10,
+  });
+  try {
+    seal(file, key, plain);
     return file;
   } finally {
     key.fill(0);

@@ -1,194 +1,175 @@
 /**
- * The frame around the unlocked wallet.
- *
- * Three places, and only three, in the top bar:
- *   Investor  — what you own and the rent you can claim
- *   Admin     — manager tools, hidden from everyone else by the contract role
- *   Wallet    — accounts, send, sign, and the piggy bank
- *
- * The account menu switches which address signs. The badge next to it says
- * Admin or Investor once a property exists. Lock drops the phrase from memory.
+ * App shell: sidebar on desktop, bottom nav on a phone, network and account
+ * controls in the top bar. Lock drops the secret from memory.
  */
-import { Lock, Moon, Sun } from 'lucide-react';
+import {
+  Building2,
+  LayoutDashboard,
+  Lock,
+  Moon,
+  PenLine,
+  PiggyBank,
+  Send,
+  Sun,
+  Wallet,
+} from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { redactRpcUrl } from '@wallet/safety';
-import { propertyRole } from '@wallet/roles';
-import { readPropertyOverview } from '@wallet/property';
 import { useApp, type PageId } from '../state';
-import { Banner, Button, TextInput } from './ui';
-import { InvestorPage } from '../pages/Investor';
-import { PropertyPage } from '../pages/Property';
+import { Button, Note, TestnetBadge, TextInput } from './ui';
 import { DashboardPage } from '../pages/Dashboard';
 import { AccountsPage } from '../pages/Accounts';
 import { SendPage } from '../pages/Send';
 import { SignPage } from '../pages/Sign';
 import { VaultPage } from '../pages/Vault';
-import { accountAt } from '../lib/session';
+import { PropertyPage } from '../pages/Property';
 
-const AREAS: { id: PageId; label: string }[] = [
-  { id: 'investor', label: 'Investor' },
-  { id: 'admin', label: 'Admin' },
-  { id: 'dashboard', label: 'Wallet' },
+const GROUPS: { label: string; items: { id: PageId; label: string; icon: typeof Wallet }[] }[] = [
+  { label: 'Portfolio', items: [{ id: 'dashboard', label: 'Overview', icon: LayoutDashboard }] },
+  {
+    label: 'Wallet',
+    items: [
+      { id: 'accounts', label: 'Accounts', icon: Wallet },
+      { id: 'send', label: 'Send', icon: Send },
+      { id: 'sign', label: 'Sign', icon: PenLine },
+    ],
+  },
+  {
+    label: 'Operator',
+    items: [
+      { id: 'property', label: 'Admin', icon: Building2 },
+      { id: 'vault', label: 'Vault', icon: PiggyBank },
+    ],
+  },
 ];
 
-const WALLET_PAGES: { id: PageId; label: string }[] = [
-  { id: 'dashboard', label: 'Balance' },
-  { id: 'accounts', label: 'Accounts' },
-  { id: 'send', label: 'Send' },
-  { id: 'sign', label: 'Sign' },
-  { id: 'vault', label: 'Vault' },
-];
-
-function isWalletPage(page: PageId): boolean {
-  return WALLET_PAGES.some((item) => item.id === page);
-}
+const FLAT = GROUPS.flatMap((group) => group.items);
 
 export function Shell() {
   const app = useApp();
   const [networkOpen, setNetworkOpen] = useState(false);
-  const [roleLabel, setRoleLabel] = useState('No property yet');
   const unlocked = app.wallet.status === 'unlocked' ? app.wallet : null;
-  const accounts = unlocked
-    ? Array.from({ length: unlocked.accountCount }, (_, index) => accountAt(index))
-    : [];
-
-  useEffect(() => {
-    if (!unlocked || !app.live.chainId) {
-      setRoleLabel('No property yet');
-      return;
-    }
-    const property = app.contractsFor(app.live.chainId).property;
-    if (!property) {
-      setRoleLabel('No property yet');
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      try {
-        const overview = await readPropertyOverview({
-          config: app.getConfig(),
-          property: { address: property, source: 'this browser' },
-          who: unlocked.address,
-        });
-        if (cancelled) return;
-        const role = propertyRole({ propertyDeployed: true, youAreManager: overview.youAreManager });
-        setRoleLabel(role === 'manager' ? 'Admin' : 'Investor');
-      } catch {
-        if (!cancelled) setRoleLabel('Role unknown');
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [app, unlocked]);
 
   return (
-    <div className="min-h-screen">
-      <Banner />
-      <header className="border-b border-line bg-card/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
-          <div className="mr-auto">
-            <p className="font-serif text-xl leading-none">Learning wallet</p>
-            <p className="text-xs text-muted">Investor view and admin tools</p>
+    <div className="min-h-screen lg:grid lg:grid-cols-[232px_minmax(0,1fr)]">
+      <aside className="hidden border-r border-line bg-card lg:flex lg:flex-col">
+        <div className="flex items-center justify-between px-5 py-5">
+          <div>
+            <p className="text-sm font-semibold tracking-tight">PropertyShare</p>
+            <p className="text-xs text-muted">Real estate tokens</p>
           </div>
-          <button
-            type="button"
-            className="rounded-full border border-line bg-card-2 px-3 py-1.5 text-left text-xs"
-            onClick={() => setNetworkOpen((open) => !open)}
-          >
-            <span className={app.live.connected ? 'text-moss' : 'text-danger'}>● </span>
-            <span className="font-semibold">{app.network.choice === 'anvil' ? 'Anvil' : 'Sepolia'}</span>
-            <span className="text-muted"> · {app.live.connected ? `chain ${app.live.chainId}` : 'offline'}</span>
-          </button>
-          {unlocked ? (
-            <label className="flex items-center gap-2 text-xs">
-              <span className="rounded-full bg-card-2 px-2 py-1 font-semibold">{roleLabel}</span>
-              <select
-                aria-label="Account"
-                className="rounded-full border border-line bg-card px-2 py-1"
-                value={unlocked.index}
-                onChange={(event) => app.selectAccount(Number(event.target.value))}
-              >
-                {accounts.map((account) => (
-                  <option key={account.path} value={account.path.split('/').pop()}>
-                    Account {account.path.split('/').pop()} · {account.address.slice(0, 6)}…{account.address.slice(-4)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-          <Button tone="ghost" onClick={app.toggleTheme} aria-label="Toggle color theme">
-            {app.theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-          </Button>
-          <Button tone="quiet" onClick={app.lock}>
-            <Lock size={16} /> Lock
-          </Button>
         </div>
-        {networkOpen ? <NetworkPanel onClose={() => setNetworkOpen(false)} /> : null}
-        <nav className="mx-auto flex max-w-6xl gap-2 px-4 pb-3">
-          {AREAS.map((item) => {
-            const active = item.id === 'dashboard' ? isWalletPage(app.page) : app.page === item.id;
-            return (
-              <button
-                key={item.label}
-                type="button"
-                onClick={() => app.setPage(item.id)}
-                className={
-                  active
-                    ? 'rounded-full bg-moss px-4 py-1.5 text-sm font-semibold text-moss-ink'
-                    : 'rounded-full px-4 py-1.5 text-sm text-muted hover:bg-card-2'
-                }
-              >
-                {item.label}
-              </button>
-            );
-          })}
+        <nav className="flex-1 space-y-6 px-3">
+          {GROUPS.map((group) => (
+            <div key={group.label}>
+              <p className="px-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">{group.label}</p>
+              <div className="mt-1 space-y-0.5">
+                {group.items.map((item) => (
+                  <NavButton key={item.id} id={item.id} label={item.label} icon={item.icon} />
+                ))}
+              </div>
+            </div>
+          ))}
         </nav>
-        {isWalletPage(app.page) ? (
-          <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 pb-3">
-            {WALLET_PAGES.map((item) => (
+      </aside>
+      <div className="min-w-0">
+        <header className="sticky top-0 z-20 border-b border-line bg-paper/90 backdrop-blur">
+          <div className="flex flex-wrap items-center gap-2 px-4 py-3">
+            <p className="text-sm font-semibold tracking-tight lg:hidden">PropertyShare</p>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <TestnetBadge />
               <button
-                key={item.id}
                 type="button"
-                onClick={() => app.setPage(item.id)}
-                className={
-                  app.page === item.id
-                    ? 'rounded-full bg-card-2 px-3 py-1 text-sm font-semibold'
-                    : 'rounded-full px-3 py-1 text-sm text-muted'
-                }
+                className="rounded-full border border-line bg-card px-3 py-1.5 text-left text-xs"
+                onClick={() => setNetworkOpen((open) => !open)}
               >
-                {item.label}
+                <span className={app.live.connected ? 'text-moss' : 'text-danger'}>● </span>
+                <span className="font-medium">{app.network.choice === 'anvil' ? 'Anvil' : 'Sepolia'}</span>
+                <span className="text-muted"> · {app.live.connected ? app.live.chainId : 'offline'}</span>
               </button>
-            ))}
-          </nav>
-        ) : null}
-      </header>
-      <main className="mx-auto max-w-6xl space-y-4 px-4 py-6">
-        {app.notice ? (
-          <div className="flex items-start justify-between gap-3 rounded-2xl bg-card-2 px-4 py-3 text-sm">
-            <p>{app.notice}</p>
-            <button type="button" className="text-muted" onClick={app.clearNotice}>
-              Close
-            </button>
+              {unlocked ? (
+                <button
+                  type="button"
+                  className="max-w-[9.5rem] truncate rounded-full border border-line bg-card px-3 py-1.5 font-mono text-xs"
+                  onClick={() => app.setPage('accounts')}
+                  title={unlocked.address}
+                >
+                  {unlocked.address.slice(0, 6)}…{unlocked.address.slice(-4)}
+                </button>
+              ) : null}
+              <Button tone="ghost" onClick={app.toggleTheme} aria-label="Toggle color theme">
+                {app.theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+              </Button>
+              <Button tone="quiet" onClick={app.lock}>
+                <Lock size={16} /> Lock
+              </Button>
+            </div>
           </div>
-        ) : null}
-        {app.live.error ? <p className="rounded-2xl bg-danger-bg px-3 py-2 text-sm text-danger">{app.live.error}</p> : null}
-        <Page />
-      </main>
+          {networkOpen ? <NetworkPanel onClose={() => setNetworkOpen(false)} /> : null}
+        </header>
+        <main className="mx-auto max-w-6xl space-y-4 px-4 py-6 pb-24 lg:pb-8">
+          {app.notice ? (
+            <div className="flex items-start justify-between gap-3 rounded-xl border border-line bg-card px-4 py-3 text-sm">
+              <p>{app.notice}</p>
+              <button type="button" className="text-muted" onClick={app.clearNotice}>
+                Close
+              </button>
+            </div>
+          ) : null}
+          {app.live.error ? <Note tone="bad">{app.live.error}</Note> : null}
+          <Page />
+        </main>
+        <nav className="fixed inset-x-0 bottom-0 z-20 flex gap-1 overflow-x-auto border-t border-line bg-card px-2 py-2 lg:hidden">
+          {FLAT.map((item) => (
+            <NavButton key={item.id} id={item.id} label={item.label} icon={item.icon} compact />
+          ))}
+        </nav>
+      </div>
     </div>
+  );
+}
+
+function NavButton({
+  id,
+  label,
+  icon: Icon,
+  compact = false,
+}: {
+  id: PageId;
+  label: string;
+  icon: typeof Wallet;
+  compact?: boolean;
+}) {
+  const app = useApp();
+  const active = app.page === id;
+  return (
+    <button
+      type="button"
+      onClick={() => app.setPage(id)}
+      className={
+        compact
+          ? active
+            ? 'inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-moss px-2.5 py-1.5 text-xs font-medium text-moss-ink'
+            : 'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted'
+          : active
+            ? 'flex w-full items-center gap-2 rounded-lg bg-moss px-3 py-2 text-sm font-medium text-moss-ink'
+            : 'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted hover:bg-card-2'
+      }
+    >
+      <Icon size={16} /> {label}
+    </button>
   );
 }
 
 function Page(): ReactNode {
   const app = useApp();
-  if (app.page === 'admin') return <PropertyPage />;
   if (app.page === 'accounts') return <AccountsPage />;
   if (app.page === 'send') return <SendPage />;
   if (app.page === 'sign') return <SignPage />;
   if (app.page === 'vault') return <VaultPage />;
-  if (app.page === 'dashboard') return <DashboardPage />;
-  return <InvestorPage />;
+  if (app.page === 'property') return <PropertyPage />;
+  return <DashboardPage />;
 }
 
 function NetworkPanel({ onClose }: { onClose: () => void }) {
@@ -203,14 +184,14 @@ function NetworkPanel({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pb-4">
-      <div className="space-y-3 rounded-3xl border border-line bg-card-2 p-4">
+    <div className="px-4 pb-4">
+      <div className="space-y-3 rounded-xl border border-line bg-card p-4">
         <div className="flex flex-wrap gap-2">
           <Button
             tone={app.network.choice === 'anvil' ? 'primary' : 'quiet'}
             onClick={() => app.setNetwork({ ...app.network, choice: 'anvil', anvilUrl })}
           >
-            Local Anvil
+            Anvil
           </Button>
           <Button
             tone={app.network.choice === 'sepolia' ? 'primary' : 'quiet'}
@@ -223,7 +204,7 @@ function NetworkPanel({ onClose }: { onClose: () => void }) {
           </Button>
         </div>
         <label className="block text-sm">
-          <span className="font-semibold">Anvil URL</span>
+          <span className="font-medium">Anvil URL</span>
           <TextInput
             className="mt-1"
             value={anvilUrl}
@@ -233,7 +214,7 @@ function NetworkPanel({ onClose }: { onClose: () => void }) {
           />
         </label>
         <label className="block text-sm">
-          <span className="font-semibold">Sepolia RPC URL</span>
+          <span className="font-medium">Sepolia RPC URL</span>
           <TextInput
             className="mt-1"
             type="password"
@@ -244,10 +225,10 @@ function NetworkPanel({ onClose }: { onClose: () => void }) {
             spellCheck={false}
             autoComplete="off"
           />
-          <span className="mt-1 block text-muted">Hidden because it often contains an API key. It stays in this browser.</span>
+          <span className="mt-1 block text-xs text-muted">Stored in this browser. Hidden so it is not copied by a glance.</span>
         </label>
-        <p className="text-sm text-muted">
-          {app.live.connected ? 'Connected' : 'Not connected'}. Chain id {app.live.chainId ?? 'unknown'}. {shown || 'No URL yet'}.
+        <p className="text-xs text-muted">
+          {app.live.connected ? 'Connected' : 'Not connected'}. Chain {app.live.chainId ?? 'unknown'}. {shown || 'No URL yet'}.
         </p>
       </div>
     </div>

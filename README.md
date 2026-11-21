@@ -521,9 +521,9 @@ The other address has to be one you can sign for (a second index: `npm run walle
 
 ## Using the web app
 
-The page does the same jobs as the commands below: create or import a phrase, unlock it, derive addresses, send ETH, sign a message, and talk to the vault and the property token. It adds a review screen before each signature, a rent chart, and a lesson drawer on every screen.
+The page does the same jobs as the commands below: create or import a phrase, import a raw private key, unlock it, derive addresses, send ETH, sign a message, and talk to the vault and the property token. It adds a review screen before each signature and a rent chart. The shell is a portfolio view: Overview for an investor, Admin for the operator, and Wallet for the account itself.
 
-The 12 words and the file password stay in the browser. The encrypted copy is the same scrypt + AES-GCM JSON the command line writes to `.wallet/keystore.json`. It is stored in the browser's database (IndexedDB), not sent to a server, and not printed in the page's log. Do not type a phrase that holds real funds.
+The 12 words, a raw private key, and the file password stay in the browser. The encrypted copy is the same scrypt + AES-GCM JSON the command line writes to `.wallet/keystore.json`. A phrase file and a private-key file use that same lock. The private-key file adds a `secret` field so the page knows there is no phrase to derive from. It is stored in the browser's database (IndexedDB), not sent to a server, and not printed in the page's log. Do not type a phrase or a key that holds real funds.
 
 You open the page from Windows. Anvil runs in Ubuntu. The page does not call Anvil's port itself. It asks the dev server on port 5173, and that server, inside Ubuntu, asks Anvil. That is why the Windows browser can use `http://localhost:5173` and still reach the pretend chain.
 
@@ -568,35 +568,29 @@ http://localhost:5173
 
 `localhost` here is the Windows name for the Ubuntu dev server. WSL forwards it. If the page does not load, the `npm run ui` window is not running, or Windows is not forwarding localhost. The command listens on every interface, port 5173, so the address Vite prints is the one to try.
 
-The amber bar at the top does not go away. It says this is a test network. That is intentional.
+A small Testnet badge stays in the header. Anvil and Sepolia are the only networks. That is intentional.
 
 ### A walk through the screens
 
-The top bar has three places: **Investor**, **Admin**, and **Wallet**. The account menu next to them switches which address signs. After a property exists, a badge says Admin or Investor. That badge reads the contract. It is not a setting you can flip.
+**Welcome.** Four doors. Create makes 12 words and asks you to write them down, then type them back, before it encrypts them. Import words takes a phrase you already have. Import a private key takes a `0x` key (64 hex characters, the shape `cast wallet new` prints). The page checks the key and shows the address it controls before anything is saved, then encrypts it with a file password. There is no recovery phrase for that wallet, and Accounts will not offer extra derived addresses. Open a keystore file takes the JSON from the command line (`.wallet/keystore.json`) so the same locked phrase file works in both places. A private-key file opens in the page, not in the command line. The file password is at least 8 characters and must not be the 12 words or the private key. The pause while saving is scrypt. It is supposed to happen.
 
-**Welcome.** Three doors. Create makes 12 words and asks you to write them down, then type them back, before it encrypts them. Import takes words you already have. Open a keystore file takes the JSON from the command line (`.wallet/keystore.json`). The file password is at least 8 characters and must not be the 12 words. The pause while saving is scrypt.
+**Unlock and lock.** Unlock asks for that file password. If you set a BIP-39 passphrase on a phrase wallet, it asks for that too. A private-key wallet does not have one. They are different secrets. Lock drops the secret from memory. It does not delete the encrypted copy. Forget, on the Accounts screen, does delete the copy in this browser. The paper phrase, or the private key you saved elsewhere, is the backup.
 
-**Unlock and lock.** Unlock asks for that file password. Lock drops the words from memory. It does not delete the encrypted copy.
+**The header.** Anvil is the default. Sepolia asks for an https RPC URL, which often contains an API key. The box hides it. The URL stays in this browser. If you have not set one, the page starts with the public Sepolia endpoint. The dot is the connection, and the chain id is the number the node reported (31337 for Anvil, 11155111 for Sepolia). If those disagree, the page will not sign. The address chip is the unlocked account. Fund from Anvil is only on Overview, and only while the node is local Anvil.
 
-**Investor.** The rental, and nothing else. The property name and street, your shares and your percent, the rent you can claim, and one Claim button. Below that: total rent deposited, how many investors, a short cap table, and the rent chart. If you are not the manager, this is the page you live on.
+**Overview.** The investor screen. It shows the property, your ownership percent, claimable ETH and stablecoin, wallet ETH, rent deposits, payout history, and the holder table. Claim pays this account. Empty until a PropertyShare address is saved for this chain. On Sepolia, Load Sepolia reference fills the published deployment. On Anvil, click Fund from Anvil to take ETH from the published Anvil account. The button refuses any other chain.
 
-**Admin.** Manager tools, in order. Deploy the play dollar and the shares (that account becomes the manager), and deploy the vault. Then the property details and the document hash. Then the allowlist: add an investor, or remove one to freeze their shares. Then give shares to an investor. Then deposit rent in ETH or in mock dollars. The rent chart is the deposit history. If this account is not the manager, the page says **You are not the admin** and does not show those buttons.
+**Accounts.** For a phrase, each row is `m/44'/60'/0'/0/i`. Use one of them. For an imported private key there is one row and no path to derive. Copy copies the address. The QR code is the address, not the key. Show the locked fields and you can see scrypt and a ciphertext, and download `keystore.json`. The secret itself is not in that view.
 
-**Wallet.** A second row: Balance, Accounts, Send, Sign, Vault. Balance is ETH and, on local Anvil, Fund from Anvil. Accounts lists `m/44'/60'/0'/0/i`, with copy and a QR code of the address. Send reviews chain id, nonce, gas, and the EIP-1559 fees before it signs. Sign checks an EIP-191 message without using the network. Vault is the piggy bank: deposit and withdraw. Deploying the vault is an Admin action.
+**Send and Sign.** Send reviews chain id, nonce, gas, and the EIP-1559 fees before it signs. Sign checks an EIP-191 message without using the network.
 
-**Learn.** Each main screen has a closed "Learn" disclosure. Open it when you want the plain-English explanation. It does not cover the buttons.
+**Admin.** The operator screen, separate from Overview. Deploy is three reviews: the stablecoin, the 1,000,000 shares, then a mint. The page shows the street and a document hash. Changing one letter of the placeholder sentence makes the hash stop matching. Allow and Freeze edit the manager's list. Transfer moves whole shares. Deposit rent is ETH (the value field) or stablecoin (an approval, then a deposit). Claim is also here, and on Overview. The rent chart is one bar per deposit, with ETH and stablecoin drawn separately because they are different units. The contract rejects allowlist and rent deposits from an account that is not a manager.
 
-**Light and dark.** The sun or moon in the top bar. The amber test-network bar stays up. Both choices are remembered in this browser. Neither is a secret.
+**Vault.** Deposit and withdraw. Each address can withdraw only what it deposited.
 
-A short practice, still on Anvil:
+**Help.** Short explanations sit on a help icon next to a control.
 
-1. Wallet → Balance → Fund from Anvil, so the manager account can pay fees.
-2. Wallet → Accounts → Derive the next address, twice. Those two addresses are the investors.
-3. Admin → Deploy play dollar and shares. Read each review, then sign. You are the manager.
-4. Admin → Add each investor, then give one of them some shares and the other some shares.
-5. Admin → Deposit rent in ETH.
-6. Switch the account menu to the first investor. The badge says Investor. Admin now says you are not the admin.
-7. Investor → Claim. The rent you are owed moves to that account.
+**Light and dark.** The sun or moon in the top bar. The choice is remembered in this browser. It is not a secret.
 
 When you are done, Ctrl+C in the `npm run ui` window, and Ctrl+C in the Anvil window. The encrypted words remain until you forget them on the Accounts screen or clear the site's data in the browser.
 

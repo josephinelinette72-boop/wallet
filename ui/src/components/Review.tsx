@@ -23,7 +23,7 @@ export function Review({
     <Card className="space-y-4">
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-muted">Review before you sign</p>
-        <h2 className="font-serif text-3xl">Read the fields</h2>
+        <h2 className="text-xl font-semibold tracking-tight">Review</h2>
       </div>
       <Note>
         The signature covers every line below. Chain id, nonce, gas, and fees are part of the transaction, not a
@@ -58,7 +58,7 @@ export function TxResult({
   return (
     <Card className="space-y-3">
       <p className="text-xs font-semibold uppercase tracking-wide text-muted">Transaction</p>
-      <h2 className="font-serif text-3xl">{title}</h2>
+      <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
       <p className="text-sm leading-relaxed text-muted">
         {status === 'pending'
           ? 'The node has the signed transaction, or it is on its way. A hash identifies it. A hash is not a key.'

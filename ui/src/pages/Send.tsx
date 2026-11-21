@@ -41,7 +41,7 @@ export function SendPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="font-serif text-4xl">Send ETH</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Send</h1>
         <p className="max-w-2xl text-sm leading-relaxed text-muted">
           {unlocked?.kind === 'private-key' ? 'From the imported key.' : `From ${unlocked?.path ?? ''}.`} A plain transfer also pays a fee, so sending the entire balance fails.
         </p>

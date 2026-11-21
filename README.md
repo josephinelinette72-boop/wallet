@@ -521,7 +521,7 @@ The other address has to be one you can sign for (a second index: `npm run walle
 
 ## Using the web app
 
-The page does the same jobs as the commands below: create or import a phrase, import a raw private key, unlock it, derive addresses, send ETH, sign a message, and talk to the vault and the property token. It adds a review screen before each signature, a rent chart, and a lesson drawer on every screen.
+The page does the same jobs as the commands below: create or import a phrase, import a raw private key, unlock it, derive addresses, send ETH, sign a message, and talk to the vault and the property token. It adds a review screen before each signature and a rent chart. The shell is a portfolio view: Overview for an investor, Admin for the operator, and Wallet for the account itself.
 
 The 12 words, a raw private key, and the file password stay in the browser. The encrypted copy is the same scrypt + AES-GCM JSON the command line writes to `.wallet/keystore.json`. A phrase file and a private-key file use that same lock. The private-key file adds a `secret` field so the page knows there is no phrase to derive from. It is stored in the browser's database (IndexedDB), not sent to a server, and not printed in the page's log. Do not type a phrase or a key that holds real funds.
 
@@ -568,7 +568,7 @@ http://localhost:5173
 
 `localhost` here is the Windows name for the Ubuntu dev server. WSL forwards it. If the page does not load, the `npm run ui` window is not running, or Windows is not forwarding localhost. The command listens on every interface, port 5173, so the address Vite prints is the one to try.
 
-The amber bar at the top does not go away. It says this is a test network. That is intentional.
+A small Testnet badge stays in the header. Anvil and Sepolia are the only networks. That is intentional.
 
 ### A walk through the screens
 
@@ -576,9 +576,9 @@ The amber bar at the top does not go away. It says this is a test network. That 
 
 **Unlock and lock.** Unlock asks for that file password. If you set a BIP-39 passphrase on a phrase wallet, it asks for that too. A private-key wallet does not have one. They are different secrets. Lock drops the secret from memory. It does not delete the encrypted copy. Forget, on the Accounts screen, does delete the copy in this browser. The paper phrase, or the private key you saved elsewhere, is the backup.
 
-**The top bar.** Anvil is the default. Sepolia asks for an https RPC URL, which often contains an API key. The box hides it. The URL stays in this browser. The dot is the connection, and the chain id is the number the node reported (31337 for Anvil, 11155111 for Sepolia). If those disagree, the page will not sign. Fund from Anvil is only on the home screen, and only while the node is local Anvil.
+**The header.** Anvil is the default. Sepolia asks for an https RPC URL, which often contains an API key. The box hides it. The URL stays in this browser. If you have not set one, the page starts with the public Sepolia endpoint. The dot is the connection, and the chain id is the number the node reported (31337 for Anvil, 11155111 for Sepolia). If those disagree, the page will not sign. The address chip is the unlocked account. Fund from Anvil is only on Overview, and only while the node is local Anvil.
 
-**Home.** ETH, mock dollars, and property shares. Empty until you fund and deploy. Recent activity is this page's own sends plus contract logs. On Anvil, click Fund from Anvil to take play ETH from the published textbook account. The button refuses any other chain.
+**Overview.** The investor screen. It shows the property, your ownership percent, claimable ETH and stablecoin, wallet ETH, rent deposits, payout history, and the holder table. Claim pays this account. Empty until a PropertyShare address is saved for this chain. On Sepolia, Load Sepolia reference fills the published deployment. On Anvil, click Fund from Anvil to take ETH from the published Anvil account. The button refuses any other chain.
 
 **Accounts.** For a phrase, each row is `m/44'/60'/0'/0/i`. Use one of them. For an imported private key there is one row and no path to derive. Copy copies the address. The QR code is the address, not the key. Show the locked fields and you can see scrypt and a ciphertext, and download `keystore.json`. The secret itself is not in that view.
 
@@ -588,9 +588,9 @@ The amber bar at the top does not go away. It says this is a test network. That 
 
 **Vault.** Deploy creates the piggy bank. Deposit attaches ETH as the transaction value. Withdraw shows value 0, because the contract sends the ETH during the call. The three numbers are your ledger entry, the contract's own total, and the ETH the chain says the contract holds. Paste an address if you already deployed one with `npm run wallet -- contract deploy`.
 
-**Property.** Deploy is three reviews: the play dollar, the 1,000,000 shares, then a mint of play dollars. The page then shows the street, the document hash, and a box where changing one letter of the placeholder sentence makes the hash stop matching. The cap table is the holders and their percent of 1,000,000. Allow and Freeze are the manager's list. Transfer moves whole shares. Deposit rent is ETH (the value field) or mock dollars (an approval, then a deposit). Claim pays this account what its shares have earned. The chart is one bar per deposit, with ETH and mock dollars drawn separately because they are different units.
+**Admin.** The operator screen, separate from Overview. Deploy is three reviews: the stablecoin, the 1,000,000 shares, then a mint. The page shows the street and a document hash. Changing one letter of the placeholder sentence makes the hash stop matching. Allow and Freeze edit the manager's list. Transfer moves whole shares. Deposit rent is ETH (the value field) or stablecoin (an approval, then a deposit). Claim is also here, and on Overview. The rent chart is one bar per deposit, with ETH and stablecoin drawn separately because they are different units.
 
-**Learn.** The Learn button, and the lesson on the welcome screen, explains the idea on that screen in plain English: words, keys, gas, signatures, and why a share token is not a deed.
+**Help.** Short explanations sit on a help icon next to a control. There is no lesson drawer.
 
 **Light and dark.** The sun or moon in the top bar. The choice is remembered in this browser. It is not a secret.
 

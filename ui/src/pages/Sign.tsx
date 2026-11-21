@@ -17,13 +17,13 @@ import { Button, Card, Field, Note, TextArea, TextInput } from '../components/ui
 export function SignPage() {
   const app = useApp();
   const unlocked = app.wallet.status === 'unlocked' ? app.wallet : null;
-  const [message, setMessage] = useState('hello from my learning wallet');
+  const [message, setMessage] = useState('Hello from PropertyShare');
   const [previewHash, setPreviewHash] = useState<string | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
   const [signedHash, setSignedHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [checkMessage, setCheckMessage] = useState('hello from my learning wallet');
+  const [checkMessage, setCheckMessage] = useState('Hello from PropertyShare');
   const [checkSignature, setCheckSignature] = useState('');
   const [checkAddress, setCheckAddress] = useState(unlocked?.address ?? '');
   const [verdict, setVerdict] = useState<string | null>(null);
@@ -76,7 +76,7 @@ export function SignPage() {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <div className="space-y-4">
-        <h1 className="font-serif text-4xl">Sign</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Sign</h1>
         <Card className="space-y-4">
           {error ? <Note tone="bad">{error}</Note> : null}
           <Field label="Message" hint="This is text, not a transaction. The prefix “Ethereum Signed Message” keeps the two apart.">
@@ -100,7 +100,7 @@ export function SignPage() {
         </Card>
       </div>
       <Card className="space-y-4">
-        <h2 className="font-serif text-3xl">Check a signature</h2>
+        <h2 className="text-xl font-semibold tracking-tight">Check a signature</h2>
         <p className="text-sm leading-relaxed text-muted">
           This does not ask for the password again and does not use the network. Anyone with these three values can run it.
         </p>

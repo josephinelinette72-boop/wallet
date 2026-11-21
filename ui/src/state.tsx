@@ -31,7 +31,6 @@ import {
   type KeystoreFile,
   type SecretKind,
 } from '@wallet/keystoreCrypto';
-import type { LearnTopic } from './learn';
 import { friendlyError } from './lib/errors';
 import { browserConfig, installBrowserRpcProxy, rpcProblem } from './lib/network';
 import { accountAt, closeSession, openPrivateKeySession, openSession } from './lib/session';
@@ -82,9 +81,6 @@ type AppValue = {
   setPage: (page: PageId) => void;
   theme: ThemeName;
   toggleTheme: () => void;
-  learnOpen: boolean;
-  setLearnOpen: (open: boolean) => void;
-  learnTopic: LearnTopic;
   wallet: WalletView;
   notice: string | null;
   clearNotice: () => void;
@@ -116,11 +112,6 @@ export function useApp(): AppValue {
   return value;
 }
 
-function topicFor(page: PageId): LearnTopic {
-  if (page === 'dashboard') return 'dashboard';
-  return page;
-}
-
 function applyTheme(theme: ThemeName): void {
   saveTheme(theme);
 }
@@ -128,7 +119,6 @@ function applyTheme(theme: ThemeName): void {
 export function AppProvider({ children }: { children: ReactNode }) {
   const [page, setPage] = useState<PageId>('dashboard');
   const [theme, setTheme] = useState<ThemeName>(() => loadTheme());
-  const [learnOpen, setLearnOpen] = useState(false);
   const [wallet, setWallet] = useState<WalletView>({ status: 'loading' });
   const [notice, setNotice] = useState<string | null>(null);
   const [network, setNetworkState] = useState<NetworkSettings>(() => loadNetwork());
@@ -366,9 +356,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setTheme(next);
         applyTheme(next);
       },
-      learnOpen,
-      setLearnOpen,
-      learnTopic: wallet.status === 'unlocked' ? topicFor(page) : 'welcome',
       wallet,
       notice,
       clearNotice: () => setNotice(null),
@@ -394,7 +381,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [
       page,
       theme,
-      learnOpen,
       wallet,
       notice,
       network,

@@ -93,7 +93,7 @@ export function VaultPage() {
       const bytecode = await fetchBytecode('LearningVault');
       const prepared = await deployVault({ config, account: signer.account, path: signer.path, bytecode });
       return prepared;
-    }, 'Deployed a LearningVault');
+    }, 'Deployed a vault');
   }
 
   async function write(kind: 'deposit' | 'withdraw', raw: string) {
@@ -126,10 +126,9 @@ export function VaultPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="font-serif text-4xl">Vault</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Vault</h1>
         <p className="max-w-2xl text-sm leading-relaxed text-muted">
-          A piggy bank. Each address can withdraw only what it deposited. Stopping Anvil deletes the contract. Deploy
-          it again. The words stay.
+          Each address can withdraw only what it deposited. On Anvil, stopping the node removes the contract.
         </p>
       </div>
       {error ? <Note tone="bad">{error}</Note> : null}
@@ -155,9 +154,8 @@ export function VaultPage() {
       {loading ? <Spinner label="Reading the vault…" /> : null}
       {!vault || missing ? (
         <Card className="space-y-3">
-          <Empty title="No piggy bank on this chain yet">
-            Deploy one from this page, or paste an address you already deployed with the command line. The bytecode
-            has to be compiled first: npm run contracts:build.
+          <Empty title="No vault on this network">
+            Deploy one from this page, or paste an address from the command line. Compile first with npm run contracts:build.
           </Empty>
           {tx.phase.step === 'form' || tx.phase.step === 'error' || tx.phase.step === 'preparing' ? (
             <>
@@ -177,17 +175,17 @@ export function VaultPage() {
           <div className="grid gap-3 md:grid-cols-3">
             <Card>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted">Your ledger</p>
-              <p className="num mt-2 font-serif text-3xl">{formatEther(status.yourSavedWei)} ETH</p>
+              <p className="num mt-2 text-2xl font-semibold tracking-tight">{formatEther(status.yourSavedWei)} ETH</p>
               <p className="mt-2 text-xs text-muted">balanceOf. What this address may withdraw.</p>
             </Card>
             <Card>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted">Contract ledger</p>
-              <p className="num mt-2 font-serif text-3xl">{formatEther(status.ledgerTotalWei)} ETH</p>
+              <p className="num mt-2 text-2xl font-semibold tracking-tight">{formatEther(status.ledgerTotalWei)} ETH</p>
               <p className="mt-2 text-xs text-muted">totalEth(). The contract’s own sum.</p>
             </Card>
             <Card>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted">Chain balance</p>
-              <p className="num mt-2 font-serif text-3xl">{formatEther(status.nodeBalanceWei)} ETH</p>
+              <p className="num mt-2 text-2xl font-semibold tracking-tight">{formatEther(status.nodeBalanceWei)} ETH</p>
               <p className="mt-2 text-xs text-muted">What the node says the contract holds.</p>
             </Card>
           </div>
@@ -195,7 +193,7 @@ export function VaultPage() {
           {(tx.phase.step === 'form' || tx.phase.step === 'error' || tx.phase.step === 'preparing') && (
             <div className="grid gap-3 md:grid-cols-2">
               <Card className="space-y-3">
-                <h2 className="font-serif text-2xl">Deposit</h2>
+                <h2 className="text-lg font-semibold">Deposit</h2>
                 <p className="text-sm text-muted">The ETH is the transaction’s value. deposit() is payable.</p>
                 <Field label="ETH">
                   <TextInput value={deposit} onChange={(event) => setDeposit(event.target.value)} inputMode="decimal" />
@@ -203,7 +201,7 @@ export function VaultPage() {
                 <Button onClick={() => void write('deposit', deposit)}>Review deposit</Button>
               </Card>
               <Card className="space-y-3">
-                <h2 className="font-serif text-2xl">Withdraw</h2>
+                <h2 className="text-lg font-semibold">Withdraw</h2>
                 <p className="text-sm text-muted">The transaction value will be 0. The amount sits in the call data. You still pay the fee.</p>
                 <Field label="ETH">
                   <TextInput value={withdraw} onChange={(event) => setWithdraw(event.target.value)} inputMode="decimal" />

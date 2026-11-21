@@ -21,8 +21,8 @@
     "property:test": "forge test --root property-token -vv"
   },
   "dependencies": {
-    "@fontsource/fraunces": "^5.3.0",
-    "@fontsource/source-sans-3": "^5.3.1",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/inter": "^5.3.0",
     "@noble/ciphers": "^2.4.0",
     "@noble/curves": "^1.9.0",
     "@noble/hashes": "^2.4.0",

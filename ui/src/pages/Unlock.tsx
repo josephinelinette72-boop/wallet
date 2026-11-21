@@ -5,10 +5,8 @@
  * CLI does too.
  */
 import { useState } from 'react';
-import { BookOpen } from 'lucide-react';
 import { useApp } from '../state';
-import { LearnDrawer } from '../components/LearnDrawer';
-import { Banner, Button, Card, Field, Note, Spinner, TextInput } from '../components/ui';
+import { Button, Card, Field, Note, PageHeader, Spinner, TestnetBadge, TextInput } from '../components/ui';
 import { friendlyError } from '../lib/errors';
 
 export function Unlock() {
@@ -20,7 +18,6 @@ export function Unlock() {
   const [passphrase, setPassphrase] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [learnOpen, setLearnOpen] = useState(false);
 
   async function submit() {
     setError(null);
@@ -37,16 +34,10 @@ export function Unlock() {
 
   return (
     <div className="min-h-screen">
-      <Banner />
       <main className="mx-auto flex max-w-lg flex-col gap-4 px-4 py-10">
         <div className="flex items-start justify-between">
-          <div>
-            <p className="text-sm font-semibold text-moss">Learning wallet</p>
-            <h1 className="font-serif text-4xl">Unlock</h1>
-          </div>
-          <Button tone="quiet" onClick={() => setLearnOpen(true)}>
-            <BookOpen size={16} /> Learn
-          </Button>
+          <PageHeader kicker="PropertyShare" title="Unlock" />
+          <TestnetBadge />
         </div>
         <Card className="space-y-4">
           <Note>
@@ -77,7 +68,6 @@ export function Unlock() {
           </Button>
         </Card>
       </main>
-      <LearnDrawer topic="welcome" open={learnOpen} onClose={() => setLearnOpen(false)} />
     </div>
   );
 }

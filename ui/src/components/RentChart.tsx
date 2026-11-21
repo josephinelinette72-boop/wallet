@@ -12,8 +12,7 @@ export function RentChart({ points }: { points: RentPoint[] }) {
   if (points.length === 0) {
     return (
       <p className="text-sm leading-relaxed text-muted">
-        No rent has been deposited yet. When the manager deposits ETH or mock dollars, each deposit becomes a bar.
-        The bar is the amount that arrived, not a price.
+        No rent deposits in the recent window.
       </p>
     );
   }
@@ -21,7 +20,7 @@ export function RentChart({ points }: { points: RentPoint[] }) {
   return (
     <div className="space-y-6">
       <ChartRow title="ETH rent" points={points.filter((point) => point.asset === 'eth')} />
-      <ChartRow title="Mock-dollar rent" points={points.filter((point) => point.asset === 'stable')} />
+      <ChartRow title="Stablecoin rent" points={points.filter((point) => point.asset === 'stable')} />
     </div>
   );
 }

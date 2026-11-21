@@ -24,7 +24,7 @@ export function AccountsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="font-serif text-4xl">Accounts</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Accounts</h1>
         <p className="max-w-2xl text-sm leading-relaxed text-muted">
           {keyOnly
             ? 'This wallet is one imported private key. There is no recovery phrase, and further accounts cannot be derived from it. Send, the vault, and property sign with this address.'
@@ -68,7 +68,7 @@ export function AccountsPage() {
           )}
         </div>
         <Card className="space-y-3">
-          <h2 className="font-serif text-2xl">Address code</h2>
+          <h2 className="text-lg font-semibold">Receive</h2>
           <p className="text-sm text-muted">This code is the address. It is not the key.</p>
           <QrAddress address={accounts[index]?.address ?? app.wallet.address} />
           {keyOnly ? null : <p className="break-all font-mono text-xs">{accounts[index]?.path}</p>}
@@ -128,7 +128,7 @@ function KeystoreCard({
 
   return (
     <Card className="space-y-3">
-      <h2 className="font-serif text-2xl">The locked file</h2>
+      <h2 className="text-lg font-semibold">Keystore</h2>
       <p className="text-sm leading-relaxed text-muted">
         This is the browser’s copy of the CLI’s <span className="font-mono">keystore.json</span>. You should see
         scrypt, aes-256-gcm, a salt, an iv, a tag, and a ciphertext. You should not see the{' '}

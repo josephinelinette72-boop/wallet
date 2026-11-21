@@ -1,11 +1,8 @@
 /**
- * The frame around the unlocked wallet: the warning, the network, the
- * account, and the screen you picked.
- *
- * Lock drops the phrase from memory. It does not delete the encrypted copy.
+ * App shell: sidebar on desktop, bottom nav on a phone, network and account
+ * controls in the top bar. Lock drops the secret from memory.
  */
 import {
-  BookOpen,
   Building2,
   LayoutDashboard,
   Lock,
@@ -20,8 +17,7 @@ import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { redactRpcUrl } from '@wallet/safety';
 import { useApp, type PageId } from '../state';
-import { LearnDrawer } from './LearnDrawer';
-import { Banner, Button, Note, TextInput } from './ui';
+import { Button, Note, TestnetBadge, TextInput } from './ui';
 import { DashboardPage } from '../pages/Dashboard';
 import { AccountsPage } from '../pages/Accounts';
 import { SendPage } from '../pages/Send';
@@ -29,14 +25,26 @@ import { SignPage } from '../pages/Sign';
 import { VaultPage } from '../pages/Vault';
 import { PropertyPage } from '../pages/Property';
 
-const NAV: { id: PageId; label: string; icon: typeof Wallet }[] = [
-  { id: 'dashboard', label: 'Home', icon: LayoutDashboard },
-  { id: 'accounts', label: 'Accounts', icon: Wallet },
-  { id: 'send', label: 'Send', icon: Send },
-  { id: 'sign', label: 'Sign', icon: PenLine },
-  { id: 'vault', label: 'Vault', icon: PiggyBank },
-  { id: 'property', label: 'Property', icon: Building2 },
+const GROUPS: { label: string; items: { id: PageId; label: string; icon: typeof Wallet }[] }[] = [
+  { label: 'Portfolio', items: [{ id: 'dashboard', label: 'Overview', icon: LayoutDashboard }] },
+  {
+    label: 'Wallet',
+    items: [
+      { id: 'accounts', label: 'Accounts', icon: Wallet },
+      { id: 'send', label: 'Send', icon: Send },
+      { id: 'sign', label: 'Sign', icon: PenLine },
+    ],
+  },
+  {
+    label: 'Operator',
+    items: [
+      { id: 'property', label: 'Admin', icon: Building2 },
+      { id: 'vault', label: 'Vault', icon: PiggyBank },
+    ],
+  },
 ];
+
+const FLAT = GROUPS.flatMap((group) => group.items);
 
 export function Shell() {
   const app = useApp();
@@ -44,78 +52,113 @@ export function Shell() {
   const unlocked = app.wallet.status === 'unlocked' ? app.wallet : null;
 
   return (
-    <div className="min-h-screen">
-      <Banner />
-      <header className="border-b border-line bg-card/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
-          <div className="mr-auto">
-            <p className="font-serif text-xl leading-none">Learning wallet</p>
-            <p className="text-xs text-muted">A textbook you can click</p>
+    <div className="min-h-screen lg:grid lg:grid-cols-[232px_minmax(0,1fr)]">
+      <aside className="hidden border-r border-line bg-card lg:flex lg:flex-col">
+        <div className="flex items-center justify-between px-5 py-5">
+          <div>
+            <p className="text-sm font-semibold tracking-tight">PropertyShare</p>
+            <p className="text-xs text-muted">Real estate tokens</p>
           </div>
-          <button
-            type="button"
-            className="rounded-full border border-line bg-card-2 px-3 py-1.5 text-left text-xs"
-            onClick={() => setNetworkOpen((open) => !open)}
-          >
-            <span className={app.live.connected ? 'text-moss' : 'text-danger'}>● </span>
-            <span className="font-semibold">{app.network.choice === 'anvil' ? 'Anvil' : 'Sepolia'}</span>
-            <span className="text-muted"> · {app.live.connected ? `chain ${app.live.chainId}` : 'offline'}</span>
-          </button>
-          {unlocked ? (
-            <button
-              type="button"
-              className="hidden rounded-full border border-line px-3 py-1.5 font-mono text-xs sm:inline"
-              onClick={() => app.setPage('accounts')}
-            >
-              {unlocked.address.slice(0, 6)}…{unlocked.address.slice(-4)}
-            </button>
-          ) : null}
-          <Button tone="ghost" onClick={() => app.setLearnOpen(true)} aria-label="Open the lesson">
-            <BookOpen size={18} /> Learn
-          </Button>
-          <Button tone="ghost" onClick={app.toggleTheme} aria-label="Toggle color theme">
-            {app.theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-          </Button>
-          <Button tone="quiet" onClick={app.lock}>
-            <Lock size={16} /> Lock
-          </Button>
         </div>
-        {networkOpen ? <NetworkPanel onClose={() => setNetworkOpen(false)} /> : null}
-        <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-3 pb-3">
-          {NAV.map((item) => {
-            const Icon = item.icon;
-            const active = app.page === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => app.setPage(item.id)}
-                className={
-                  active
-                    ? 'inline-flex items-center gap-2 rounded-full bg-moss px-3 py-1.5 text-sm font-semibold text-moss-ink'
-                    : 'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm text-muted hover:bg-card-2'
-                }
-              >
-                <Icon size={16} /> {item.label}
-              </button>
-            );
-          })}
+        <nav className="flex-1 space-y-6 px-3">
+          {GROUPS.map((group) => (
+            <div key={group.label}>
+              <p className="px-3 text-[11px] font-medium uppercase tracking-[0.14em] text-muted">{group.label}</p>
+              <div className="mt-1 space-y-0.5">
+                {group.items.map((item) => (
+                  <NavButton key={item.id} id={item.id} label={item.label} icon={item.icon} />
+                ))}
+              </div>
+            </div>
+          ))}
         </nav>
-      </header>
-      <main className="mx-auto max-w-6xl space-y-4 px-4 py-6">
-        {app.notice ? (
-          <div className="flex items-start justify-between gap-3 rounded-2xl bg-card-2 px-4 py-3 text-sm">
-            <p>{app.notice}</p>
-            <button type="button" className="text-muted" onClick={app.clearNotice}>
-              Close
-            </button>
+      </aside>
+      <div className="min-w-0">
+        <header className="sticky top-0 z-20 border-b border-line bg-paper/90 backdrop-blur">
+          <div className="flex flex-wrap items-center gap-2 px-4 py-3">
+            <p className="text-sm font-semibold tracking-tight lg:hidden">PropertyShare</p>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <TestnetBadge />
+              <button
+                type="button"
+                className="rounded-full border border-line bg-card px-3 py-1.5 text-left text-xs"
+                onClick={() => setNetworkOpen((open) => !open)}
+              >
+                <span className={app.live.connected ? 'text-moss' : 'text-danger'}>● </span>
+                <span className="font-medium">{app.network.choice === 'anvil' ? 'Anvil' : 'Sepolia'}</span>
+                <span className="text-muted"> · {app.live.connected ? app.live.chainId : 'offline'}</span>
+              </button>
+              {unlocked ? (
+                <button
+                  type="button"
+                  className="max-w-[9.5rem] truncate rounded-full border border-line bg-card px-3 py-1.5 font-mono text-xs"
+                  onClick={() => app.setPage('accounts')}
+                  title={unlocked.address}
+                >
+                  {unlocked.address.slice(0, 6)}…{unlocked.address.slice(-4)}
+                </button>
+              ) : null}
+              <Button tone="ghost" onClick={app.toggleTheme} aria-label="Toggle color theme">
+                {app.theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+              </Button>
+              <Button tone="quiet" onClick={app.lock}>
+                <Lock size={16} /> Lock
+              </Button>
+            </div>
           </div>
-        ) : null}
-        {app.live.error ? <Note tone="bad">{app.live.error}</Note> : null}
-        <Page />
-      </main>
-      <LearnDrawer topic={app.learnTopic} open={app.learnOpen} onClose={() => app.setLearnOpen(false)} />
+          {networkOpen ? <NetworkPanel onClose={() => setNetworkOpen(false)} /> : null}
+        </header>
+        <main className="mx-auto max-w-6xl space-y-4 px-4 py-6 pb-24 lg:pb-8">
+          {app.notice ? (
+            <div className="flex items-start justify-between gap-3 rounded-xl border border-line bg-card px-4 py-3 text-sm">
+              <p>{app.notice}</p>
+              <button type="button" className="text-muted" onClick={app.clearNotice}>
+                Close
+              </button>
+            </div>
+          ) : null}
+          {app.live.error ? <Note tone="bad">{app.live.error}</Note> : null}
+          <Page />
+        </main>
+        <nav className="fixed inset-x-0 bottom-0 z-20 flex gap-1 overflow-x-auto border-t border-line bg-card px-2 py-2 lg:hidden">
+          {FLAT.map((item) => (
+            <NavButton key={item.id} id={item.id} label={item.label} icon={item.icon} compact />
+          ))}
+        </nav>
+      </div>
     </div>
+  );
+}
+
+function NavButton({
+  id,
+  label,
+  icon: Icon,
+  compact = false,
+}: {
+  id: PageId;
+  label: string;
+  icon: typeof Wallet;
+  compact?: boolean;
+}) {
+  const app = useApp();
+  const active = app.page === id;
+  return (
+    <button
+      type="button"
+      onClick={() => app.setPage(id)}
+      className={
+        compact
+          ? active
+            ? 'inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-moss px-2.5 py-1.5 text-xs font-medium text-moss-ink'
+            : 'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted'
+          : active
+            ? 'flex w-full items-center gap-2 rounded-lg bg-moss px-3 py-2 text-sm font-medium text-moss-ink'
+            : 'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted hover:bg-card-2'
+      }
+    >
+      <Icon size={16} /> {label}
+    </button>
   );
 }
 
@@ -141,14 +184,14 @@ function NetworkPanel({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pb-4">
-      <div className="space-y-3 rounded-3xl border border-line bg-card-2 p-4">
+    <div className="px-4 pb-4">
+      <div className="space-y-3 rounded-xl border border-line bg-card p-4">
         <div className="flex flex-wrap gap-2">
           <Button
             tone={app.network.choice === 'anvil' ? 'primary' : 'quiet'}
             onClick={() => app.setNetwork({ ...app.network, choice: 'anvil', anvilUrl })}
           >
-            Local Anvil
+            Anvil
           </Button>
           <Button
             tone={app.network.choice === 'sepolia' ? 'primary' : 'quiet'}
@@ -156,15 +199,12 @@ function NetworkPanel({ onClose }: { onClose: () => void }) {
           >
             Sepolia
           </Button>
-          <Button tone="ghost" onClick={() => app.setLearnOpen(true)}>
-            Why two networks?
-          </Button>
           <Button tone="ghost" className="ml-auto" onClick={onClose}>
             Close
           </Button>
         </div>
         <label className="block text-sm">
-          <span className="font-semibold">Anvil URL</span>
+          <span className="font-medium">Anvil URL</span>
           <TextInput
             className="mt-1"
             value={anvilUrl}
@@ -172,13 +212,9 @@ function NetworkPanel({ onClose }: { onClose: () => void }) {
             onBlur={() => app.setNetwork({ ...app.network, anvilUrl })}
             spellCheck={false}
           />
-          <span className="mt-1 block text-muted">
-            Default is http://127.0.0.1:8545. If you started Anvil with another port, change it here. The dev server,
-            inside Ubuntu, is what actually calls this address.
-          </span>
         </label>
         <label className="block text-sm">
-          <span className="font-semibold">Sepolia RPC URL</span>
+          <span className="font-medium">Sepolia RPC URL</span>
           <TextInput
             className="mt-1"
             type="password"
@@ -189,14 +225,10 @@ function NetworkPanel({ onClose }: { onClose: () => void }) {
             spellCheck={false}
             autoComplete="off"
           />
-          <span className="mt-1 block text-muted">
-            Often contains an API key. It stays in this browser. The box is hidden so a glance does not copy it. It is
-            not written to git.
-          </span>
+          <span className="mt-1 block text-xs text-muted">Stored in this browser. Hidden so it is not copied by a glance.</span>
         </label>
-        <p className="text-sm text-muted">
-          Status: {app.live.connected ? 'connected' : 'not connected'}. Chain id: {app.live.chainId ?? 'unknown'}.
-          Showing {shown || 'no URL yet'}.
+        <p className="text-xs text-muted">
+          {app.live.connected ? 'Connected' : 'Not connected'}. Chain {app.live.chainId ?? 'unknown'}. {shown || 'No URL yet'}.
         </p>
       </div>
     </div>

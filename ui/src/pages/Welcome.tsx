@@ -7,15 +7,13 @@
  * encrypted JSON is saved. They are never written to localStorage.
  */
 import { useRef, useState } from 'react';
-import { BookOpen } from 'lucide-react';
 import { accountFromPrivateKey } from '@wallet/account';
 import { parsePrivateKey } from '@wallet/address';
 import { assertValidMnemonic, createMnemonic, normalizeMnemonic } from '@wallet/hd';
 import { parseKeystore } from '@wallet/keystoreCrypto';
 import { assertFilePassword, assertKeyPassword, assertPasswordsMatch } from '@wallet/passwordRules';
 import { useApp } from '../state';
-import { LearnDrawer } from '../components/LearnDrawer';
-import { Banner, Button, Card, Field, Note, Spinner, TextArea, TextInput } from '../components/ui';
+import { Button, Card, Field, Note, PageHeader, Spinner, TestnetBadge, TextArea, TextInput } from '../components/ui';
 import { friendlyError } from '../lib/errors';
 
 type Mode = 'choose' | 'create' | 'import' | 'key' | 'file';
@@ -24,26 +22,19 @@ type CreateStep = 'words' | 'confirm' | 'password';
 export function Welcome() {
   const app = useApp();
   const [mode, setMode] = useState<Mode>('choose');
-  const [learnOpen, setLearnOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   return (
     <div className="min-h-screen">
-      <Banner />
       <main className="mx-auto max-w-3xl space-y-5 px-4 py-8">
-        <header className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold text-moss">Learning wallet</p>
-            <h1 className="font-serif text-4xl leading-tight">A textbook you can click</h1>
-            <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">
-              The 12 words are the wallet. This browser only keeps an encrypted copy, the same scrypt and AES-GCM lock
-              the command line uses. Nothing on this page is sent to a server.
-            </p>
-          </div>
-          <Button tone="quiet" onClick={() => setLearnOpen(true)}>
-            <BookOpen size={16} /> Learn
-          </Button>
-        </header>
+        <div className="flex items-start justify-between gap-3">
+          <PageHeader kicker="PropertyShare" title="Wallet" />
+          <TestnetBadge />
+        </div>
+        <p className="max-w-xl text-sm leading-relaxed text-muted">
+          Create a recovery phrase, import a phrase, or import a private key. The secret is encrypted in this browser
+          and is not sent to a server.
+        </p>
         {app.notice ? <Note>{app.notice}</Note> : null}
         {error ? <Note tone="bad">{error}</Note> : null}
         {mode === 'choose' ? (
@@ -59,15 +50,14 @@ export function Welcome() {
         {mode === 'key' ? <KeyFlow onBack={() => setMode('choose')} onError={setError} /> : null}
         {mode === 'file' ? <FileFlow onBack={() => setMode('choose')} onError={setError} /> : null}
       </main>
-      <LearnDrawer topic="welcome" open={learnOpen} onClose={() => setLearnOpen(false)} />
     </div>
   );
 }
 
 function Choice({ title, body, onClick }: { title: string; body: string; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className="rounded-3xl border border-line bg-card p-4 text-left shadow-card hover:bg-card-2">
-      <span className="font-serif text-2xl">{title}</span>
+    <button type="button" onClick={onClick} className="rounded-xl border border-line bg-card p-4 text-left shadow-card hover:bg-card-2">
+      <span className="text-lg font-semibold">{title}</span>
       <span className="mt-2 block text-sm leading-relaxed text-muted">{body}</span>
     </button>
   );
@@ -117,7 +107,7 @@ function CreateFlow({ onBack, onError }: { onBack: () => void; onError: (message
   return (
     <Card className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="font-serif text-3xl">New wallet</h2>
+        <h2 className="text-xl font-semibold tracking-tight">New wallet</h2>
         <Button tone="ghost" onClick={onBack}>Back</Button>
       </div>
       {step === 'words' ? (
@@ -130,7 +120,7 @@ function CreateFlow({ onBack, onError }: { onBack: () => void; onError: (message
             {words.map((word, index) => (
               <li key={`${word}-${index}`} className="rounded-2xl bg-card-2 px-3 py-2">
                 <span className="text-xs text-muted">{index + 1}</span>
-                <span className="block font-serif text-lg">{word}</span>
+                <span className="block text-base font-medium">{word}</span>
               </li>
             ))}
           </ol>
@@ -228,7 +218,7 @@ function ImportFlow({ onBack, onError }: { onBack: () => void; onError: (message
   return (
     <Card className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="font-serif text-3xl">Import words</h2>
+        <h2 className="text-xl font-semibold tracking-tight">Import words</h2>
         <Button tone="ghost" onClick={onBack}>Back</Button>
       </div>
       <Note>
@@ -300,7 +290,7 @@ function KeyFlow({ onBack, onError }: { onBack: () => void; onError: (message: s
   return (
     <Card className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="font-serif text-3xl">Import a private key</h2>
+        <h2 className="text-xl font-semibold tracking-tight">Import a private key</h2>
         <Button tone="ghost" onClick={onBack}>Back</Button>
       </div>
       <Note>
@@ -358,7 +348,7 @@ function FileFlow({ onBack, onError }: { onBack: () => void; onError: (message: 
   return (
     <Card className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="font-serif text-3xl">Open a keystore file</h2>
+        <h2 className="text-xl font-semibold tracking-tight">Open a keystore file</h2>
         <Button tone="ghost" onClick={onBack}>Back</Button>
       </div>
       <Note>

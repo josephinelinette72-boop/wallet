@@ -1,0 +1,42 @@
+# Property-share lesson.
+#
+# This Foundry project is separate from ../foundry on purpose.
+# The vault lesson has no libraries, so a first contract can be read top to
+# bottom. This lesson uses OpenZeppelin, so it lives in its own folder.
+#
+# Compile and test from the repository root:
+#   npm run property:build
+#   npm run property:test
+#
+# Or from this folder:
+#   forge build
+#   forge test -vv
+#
+# The optimizer is off so the bytecode stays close to the source you read.
+# The rent math is cheap because of the accounting pattern in PropertyShare,
+# not because the compiler rewrote it.
+#
+# solc 0.8.28 matches the vault project. Foundry downloads that compiler
+# the first time you build. Nothing here is meant to hold real money.
+
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+test = "test"
+script = "script"
+solc = "0.8.28"
+optimizer = false
+ffi = false
+remappings = [
+    "forge-std/=lib/forge-std/src/",
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+]
+
+[fmt]
+line_length = 120
+
+# 256 runs is Foundry's usual default. Each fuzz test draws this many
+# random inputs. Raise it locally with: forge test --fuzz-runs 5000
+[fuzz]
+runs = 256

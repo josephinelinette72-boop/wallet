@@ -276,7 +276,7 @@ async function approveStable(flags: Flags): Promise<void> {
     action: `Approve the property contract to pull ${formatUnits(amount, 6)} mock dollars`,
     note: 'ERC-20 does not let a contract take your tokens until you approve it. ETH does not need this step. The next command is deposit-stable.',
     target: 'stablecoin',
-    encode: (property, stablecoin) => encodeApproveStable(property, amount),
+    encode: (property, _stablecoin) => encodeApproveStable(property, amount),
     simulate: (stablecoin, account, config, property) =>
       makePublicClient(config).simulateContract({
         address: stablecoin,

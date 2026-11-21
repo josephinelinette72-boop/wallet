@@ -1,0 +1,108 @@
+@import "@fontsource/source-sans-3/latin-400.css";
+@import "@fontsource/source-sans-3/latin-600.css";
+@import "@fontsource/source-sans-3/latin-700.css";
+@import "@fontsource/fraunces/latin-500.css";
+@import "@fontsource/fraunces/latin-600.css";
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Colors are ordinary variables so light and dark can swap them.
+ * Tailwind utilities such as bg-paper read these through the theme below.
+ * Paper and ink are the textbook. Moss is the one accent, used for actions.
+ */
+@theme inline {
+  --font-sans: "Source Sans 3", "Segoe UI", sans-serif;
+  --font-serif: "Fraunces", Georgia, serif;
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-card: var(--card);
+  --color-card-2: var(--card-2);
+  --color-moss: var(--moss);
+  --color-moss-ink: var(--moss-ink);
+  --color-warn: var(--warn);
+  --color-warn-bg: var(--warn-bg);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --shadow-card: var(--shadow);
+}
+
+:root {
+  --paper: #f3efe4;
+  --ink: #1c1914;
+  --muted: #5f584e;
+  --line: #e3d8c6;
+  --card: #fffdf8;
+  --card-2: #f6f0e4;
+  --moss: #0c6b4d;
+  --moss-ink: #f4fff9;
+  --warn: #8a4e08;
+  --warn-bg: #fff3d8;
+  --danger: #8e2433;
+  --danger-bg: #fde8ea;
+  --shadow: 0 18px 50px rgba(70, 48, 12, 0.08);
+  color-scheme: light;
+}
+
+.dark {
+  --paper: #101418;
+  --ink: #f4efe6;
+  --muted: #b7b0a4;
+  --line: #2c3842;
+  --card: #1a2128;
+  --card-2: #232c34;
+  --moss: #8fd9b4;
+  --moss-ink: #082118;
+  --warn: #f3d7a1;
+  --warn-bg: #3a2c12;
+  --danger: #ffb4bc;
+  --danger-bg: #3c1820;
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(1200px 500px at 10% -10%, color-mix(in srgb, var(--moss) 12%, transparent), transparent 50%),
+    var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+:focus-visible {
+  outline: 2px solid var(--moss);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--moss) 35%, white);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.rise {
+  animation: rise 0.35s ease both;
+}

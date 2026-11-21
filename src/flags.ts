@@ -97,7 +97,7 @@ export function parseCli(argv: string[]): ParsedCli {
     positionals = parsed.positionals;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Could not read the command.';
-    throw new Error(`${message}\nRun: npm run wallet -- help`);
+    throw new Error(`${message}\nRun: npm run wallet -- help`, { cause: error });
   }
 
   // The CLI cap is smaller than the BIP-32 maximum so a typo cannot ask the

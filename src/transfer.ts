@@ -32,6 +32,10 @@ import { describeTransaction, type FeeFields, type TransactionPreview } from './
 
 export type PreparedTransfer = {
   preview: string;
+  /** Public fields. The web app broadcasts these itself so it can show the hash while the transaction is pending. The CLI calls `send`, which waits for the receipt. */
+  fields: FeeFields;
+  to: Address;
+  valueWei: bigint;
   send: () => Promise<Hex>;
 };
 
@@ -97,6 +101,9 @@ export async function prepareEthTransfer(input: {
 
     return {
       preview: describeTransaction(previewInput),
+      fields,
+      to,
+      valueWei,
       send: async () => {
         const hash = await walletClient.sendTransaction({
           account,

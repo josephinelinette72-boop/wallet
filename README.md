@@ -582,15 +582,13 @@ A small Testnet badge stays in the header. Anvil and Sepolia are the only networ
 
 **Accounts.** For a phrase, each row is `m/44'/60'/0'/0/i`. Use one of them. For an imported private key there is one row and no path to derive. Copy copies the address. The QR code is the address, not the key. Show the locked fields and you can see scrypt and a ciphertext, and download `keystore.json`. The secret itself is not in that view.
 
-**Send.** Type an address and an amount of ETH, then Review. The review is the transaction: chain id, nonce, gas, max fee, tip, and value, with the same explanation the command line prints. Sign and send broadcasts it. Pending means the node has it. Confirmed means it was mined. The hash is public. It is not a key.
+**Send and Sign.** Send reviews chain id, nonce, gas, and the EIP-1559 fees before it signs. Sign checks an EIP-191 message without using the network.
 
-**Sign.** Preview shows the EIP-191 hash, the one with the "Ethereum Signed Message" prefix. Sign produces a signature. Check, on the right, needs the text, the signature, and an address. It does not use the network. Change one letter and it fails.
+**Admin.** The operator screen, separate from Overview. Deploy is three reviews: the stablecoin, the 1,000,000 shares, then a mint. The page shows the street and a document hash. Changing one letter of the placeholder sentence makes the hash stop matching. Allow and Freeze edit the manager's list. Transfer moves whole shares. Deposit rent is ETH (the value field) or stablecoin (an approval, then a deposit). Claim is also here, and on Overview. The rent chart is one bar per deposit, with ETH and stablecoin drawn separately because they are different units. The contract rejects allowlist and rent deposits from an account that is not a manager.
 
-**Vault.** Deploy creates the piggy bank. Deposit attaches ETH as the transaction value. Withdraw shows value 0, because the contract sends the ETH during the call. The three numbers are your ledger entry, the contract's own total, and the ETH the chain says the contract holds. Paste an address if you already deployed one with `npm run wallet -- contract deploy`.
+**Vault.** Deposit and withdraw. Each address can withdraw only what it deposited.
 
-**Admin.** The operator screen, separate from Overview. Deploy is three reviews: the stablecoin, the 1,000,000 shares, then a mint. The page shows the street and a document hash. Changing one letter of the placeholder sentence makes the hash stop matching. Allow and Freeze edit the manager's list. Transfer moves whole shares. Deposit rent is ETH (the value field) or stablecoin (an approval, then a deposit). Claim is also here, and on Overview. The rent chart is one bar per deposit, with ETH and stablecoin drawn separately because they are different units.
-
-**Help.** Short explanations sit on a help icon next to a control. There is no lesson drawer.
+**Help.** Short explanations sit on a help icon next to a control.
 
 **Light and dark.** The sun or moon in the top bar. The choice is remembered in this browser. It is not a secret.
 

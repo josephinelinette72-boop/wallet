@@ -18,13 +18,18 @@ import {
 } from '../src/keystoreCrypto.js';
 import { assertFilePassword, assertPasswordsMatch } from '../src/passwordRules.js';
 import {
+  capTableSummary,
   earnedRent,
   formatEthDisplay,
   formatSharePercent,
   formatStableDisplay,
+  investorCount,
   proRataRent,
+  rentEarnedToDate,
   RENT_PRECISION,
+  sumAmounts,
 } from '../src/payout.js';
+import { adminActionsAllowed, deployAllowed, propertyRole } from '../src/roles.js';
 import { isAllowedRpcTarget } from '../src/rpcTarget.js';
 
 const PHRASE =
@@ -102,6 +107,41 @@ test('share percents and rent slices match the property lesson', () => {
   assert.equal(aliceAfter, parseEther('1.25'));
   assert.equal(bobAfter, parseEther('0.5'));
   assert.equal(formatEthDisplay(aliceAfter), '1.25 ETH');
+});
+
+test('investor stats match a two-investor rental', () => {
+  const supply = 1_000_000n;
+  const holders = [
+    { shares: 600_000n },
+    { shares: 250_000n },
+    { shares: 150_000n },
+    { shares: 0n },
+  ];
+  assert.equal(investorCount(holders), 3);
+  const summary = capTableSummary(holders, supply);
+  assert.equal(summary.investors, 3);
+  assert.equal(summary.largestPercent, '60%');
+
+  // Alice was paid 0.25 ETH already and can still claim 0.5 ETH.
+  assert.equal(rentEarnedToDate(parseEther('0.25'), parseEther('0.5')), parseEther('0.75'));
+  assert.equal(sumAmounts([parseEther('0.25'), parseEther('0.5')]), parseEther('0.75'));
+  // Claiming does not create new rent. The total stays 0.75.
+  assert.equal(rentEarnedToDate(parseEther('0.75'), 0n), parseEther('0.75'));
+  assert.throws(() => rentEarnedToDate(-1n, 0n), /negative/);
+});
+
+test('admin buttons follow the contract role', () => {
+  assert.equal(propertyRole({ propertyDeployed: false, youAreManager: false }), 'not-deployed');
+  assert.equal(deployAllowed('not-deployed'), true);
+  assert.equal(adminActionsAllowed('not-deployed'), false);
+
+  assert.equal(propertyRole({ propertyDeployed: true, youAreManager: true }), 'manager');
+  assert.equal(adminActionsAllowed('manager'), true);
+  assert.equal(deployAllowed('manager'), true);
+
+  assert.equal(propertyRole({ propertyDeployed: true, youAreManager: false }), 'investor');
+  assert.equal(adminActionsAllowed('investor'), false);
+  assert.equal(deployAllowed('investor'), false);
 });
 
 test('the dev-server forwarder allows local Anvil and https Sepolia only', () => {

@@ -115,8 +115,8 @@ export function DashboardPage() {
         <Card>
           <p className="text-xs font-semibold uppercase tracking-wide text-muted">Mock stablecoin</p>
           <p className="num mt-2 font-serif text-3xl">{stable}</p>
-          <button type="button" className="mt-3 text-sm text-moss" onClick={() => app.setPage('property')}>
-            Property page
+          <button type="button" className="mt-3 text-sm text-moss" onClick={() => app.setPage('investor')}>
+            Investor view
           </button>
         </Card>
         <Card>

@@ -46,7 +46,7 @@ import {
   type ThemeName,
 } from './lib/storage';
 
-export type PageId = 'dashboard' | 'accounts' | 'send' | 'sign' | 'vault' | 'property';
+export type PageId = 'investor' | 'admin' | 'dashboard' | 'accounts' | 'send' | 'sign' | 'vault';
 
 export type WalletView =
   | { status: 'loading' }
@@ -106,6 +106,7 @@ export function useApp(): AppValue {
 }
 
 function topicFor(page: PageId): LearnTopic {
+  if (page === 'admin') return 'property';
   if (page === 'dashboard') return 'dashboard';
   return page;
 }
@@ -115,7 +116,7 @@ function applyTheme(theme: ThemeName): void {
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [page, setPage] = useState<PageId>('dashboard');
+  const [page, setPage] = useState<PageId>('investor');
   const [theme, setTheme] = useState<ThemeName>(() => loadTheme());
   const [learnOpen, setLearnOpen] = useState(false);
   const [wallet, setWallet] = useState<WalletView>({ status: 'loading' });
@@ -251,7 +252,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       openSession(mnemonic, file.usesPassphrase ? passphrase : '');
       const saved = loadAccounts();
       showUnlocked(saved.index, saved.count, file.usesPassphrase);
-      setPage('dashboard');
+      setPage('investor');
     },
     [showUnlocked],
   );
@@ -277,7 +278,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       openSession(mnemonic, passphrase);
       saveAccounts({ index: 0, count: 1 });
       showUnlocked(0, 1, passphrase.length > 0);
-      setPage('dashboard');
+      setPage('investor');
       setNotice('The 12 words are not stored as plaintext. This page will not show them again. The paper copy is the backup.');
     },
     [showUnlocked],
@@ -298,7 +299,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setContracts({});
     setActivity([]);
     setWallet({ status: 'empty' });
-    setPage('dashboard');
+    setPage('investor');
     setNotice('This browser forgot the locked file. The paper words still open the same keys. Anvil balances were never in the browser.');
   }, []);
 

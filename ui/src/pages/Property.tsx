@@ -39,6 +39,9 @@ import { useApp } from '../state';
 import { RentChart } from '../components/RentChart';
 import { Review, TxResult } from '../components/Review';
 import { Button, Card, Empty, Field, Note, Spinner, TextInput } from '../components/ui';
+import { deployVault } from '@wallet/vault';
+import { adminActionsAllowed, deployAllowed, propertyRole } from '@wallet/roles';
+import { LearnTip } from '../components/LearnTip';
 import { fetchBytecode } from '../lib/bytecode';
 import { readPropertyChain, type HolderRow, type RentPoint } from '../lib/chainReads';
 import { broadcastTransaction, type ReadyTransaction } from '../lib/broadcast';
@@ -75,6 +78,19 @@ export function PropertyPage() {
   const [ethRent, setEthRent] = useState('1');
   const [dollarRent, setDollarRent] = useState('1000');
   const [docText, setDocText] = useState(PLACEHOLDER_DOCUMENT);
+
+  // A vault deployment has no destination. Save that new address for this chain.
+  // Share transfers and rent deposits have a destination, so they do not match.
+  useEffect(() => {
+    if (tx.phase.step !== 'done' || tx.phase.status !== 'confirmed' || !tx.phase.contractAddress) return;
+    if (tx.phase.summary !== 'Deployed a LearningVault') return;
+    try {
+      const id = app.getConfig().chain.id;
+      app.rememberContracts(id, { vault: tx.phase.contractAddress });
+    } catch {
+      // The hash is on screen. The address can be pasted on the Vault page.
+    }
+  }, [tx.phase, app]);
 
   useEffect(() => {
     if (!unlocked || !book.property) {
@@ -241,19 +257,34 @@ export function PropertyPage() {
     }
   }
 
-  const showForms = tx.phase.step === 'form' || tx.phase.step === 'error' || tx.phase.step === 'preparing';
+  const role = propertyRole({
+    propertyDeployed: Boolean(overview),
+    youAreManager: Boolean(overview?.youAreManager),
+  });
+  const showForms =
+    (tx.phase.step === 'form' || tx.phase.step === 'error' || tx.phase.step === 'preparing') &&
+    adminActionsAllowed(role);
+  async function deployVaultHere() {
+    if (!unlocked || !deployAllowed(role)) return;
+    await tx.review(async () => {
+      const config = app.getConfig();
+      const signer = accountAt(unlocked.index);
+      const bytecode = await fetchBytecode('LearningVault');
+      return deployVault({ config, account: signer.account, path: signer.path, bytecode });
+    }, 'Deployed a LearningVault');
+  }
   const docHash = keccak256(stringToHex(docText));
   const docMatches = overview ? docHash.toLowerCase() === overview.documentHash.toLowerCase() : false;
 
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="font-serif text-4xl">Property</h1>
-        <p className="max-w-2xl text-sm leading-relaxed text-muted">
-          1,000,000 shares stand in for 100% of a pretend rental. This is a classroom model of a security. There is no
-          building, and this page is not an offer to sell anything.
+        <h1 className="font-serif text-4xl">Admin</h1>
+        <p className="max-w-2xl text-sm text-muted">
+          Manager tools for this rental. Investors use the Investor tab. There is no building behind these shares.
         </p>
       </div>
+      <LearnTip topic="property" />
       {error ? <Note tone="bad">{error}</Note> : null}
       {loading ? <Spinner label="Reading the property…" /> : null}
 
@@ -270,13 +301,15 @@ export function PropertyPage() {
       {tx.phase.step === 'pending' ? <TxResult status="pending" hash={tx.phase.hash} onDone={tx.reset} /> : null}
       {tx.phase.step === 'done' ? <TxResult status={tx.phase.status} hash={tx.phase.hash} onDone={tx.reset} /> : null}
 
-      {!overview && deploy.step === 'idle' ? (
+      {!overview && deploy.step === 'idle' && deployAllowed(role) ? (
         <Card className="space-y-3">
+          <h2 className="font-serif text-2xl">1. Deploy contracts</h2>
           <Empty title="No property on this chain yet">
-            Deploy the play dollar and the share token from this page, or paste addresses from the forge script. Compile
-            first with npm run property:build. Anvil must be running, and this account needs play ETH for the fees.
+            Deploy the play dollar, then the shares. This account becomes the manager. Compile first with npm run
+            property:build. You need play ETH for the fees.
           </Empty>
-          <Button onClick={() => void startDeploy()}>Review the first deployment</Button>
+          <Button onClick={() => void startDeploy()}>Deploy play dollar and shares</Button>
+          <Button tone="quiet" onClick={() => void deployVaultHere()}>Deploy the vault</Button>
           <Field label="PropertyShare address">
             <TextInput value={pasteProperty} onChange={(event) => setPasteProperty(event.target.value)} className="font-mono" spellCheck={false} />
           </Field>
@@ -287,8 +320,26 @@ export function PropertyPage() {
         </Card>
       ) : null}
 
-      {overview ? (
+      {overview && !adminActionsAllowed(role) ? (
+        <Card className="space-y-3">
+          <h2 className="font-serif text-3xl">You are not the admin</h2>
+          <p className="text-sm leading-relaxed text-muted">
+            This account is not the manager of {overview.propertyName}. The contract rejects allowlist changes, share
+            gifts, and rent deposits from anyone else. Switch to the manager account in the top bar, or open Investor
+            to see your shares and claim rent.
+          </p>
+          <Button onClick={() => app.setPage('investor')}>Open the investor view</Button>
+        </Card>
+      ) : null}
+
+      {overview && adminActionsAllowed(role) ? (
         <>
+          <Card className="space-y-2">
+            <h2 className="font-serif text-2xl">Contracts</h2>
+            <p className="break-all font-mono text-xs text-muted">Shares {overview.address}</p>
+            <p className="break-all font-mono text-xs text-muted">Play dollar {overview.stablecoin}</p>
+            <Button tone="quiet" onClick={() => void deployVaultHere()}>Deploy the vault</Button>
+          </Card>
           <div className="grid gap-3 md:grid-cols-2">
             <Card>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted">{overview.symbol}</p>
@@ -312,7 +363,7 @@ export function PropertyPage() {
           </div>
 
           <Card className="space-y-3">
-            <h2 className="font-serif text-2xl">Document hash</h2>
+            <h2 className="font-serif text-2xl">2. Property details</h2>
             <p className="text-sm leading-relaxed text-muted">
               The contract stores keccak256 of a text, not a PDF. The stored URI is {overview.documentUri}. Edit one
               character below and the hash stops matching. That is the whole lesson of the hash. It does not check a deed.
@@ -329,7 +380,7 @@ export function PropertyPage() {
           </Card>
 
           <Card>
-            <h2 className="font-serif text-2xl">Cap table</h2>
+            <h2 className="font-serif text-2xl">Who holds shares</h2>
             <p className="mt-1 text-sm text-muted">
               Built from Transfer events, then a balance read for each address. The contract does not keep a list of holders.
             </p>
@@ -361,11 +412,8 @@ export function PropertyPage() {
           {showForms ? (
             <div className="grid gap-3 lg:grid-cols-2">
               <Card className="space-y-3">
-                <h2 className="font-serif text-2xl">Allowlist</h2>
-                <p className="text-sm text-muted">
-                  Both sides of a transfer must be allowed. Freeze keeps the shares where they are. It does not seize them.
-                  Do not freeze your own address while you hold shares.
-                </p>
+                <h2 className="font-serif text-2xl">3. Allowlist</h2>
+                <p className="text-sm text-muted">Add an investor so they can hold shares. Remove them to freeze the shares they already hold.</p>
                 {tx.phase.step === 'error' ? <Note tone="bad">{tx.phase.message}</Note> : null}
                 <Field label="Address">
                   <TextInput value={allowAddress} onChange={(event) => setAllowAddress(event.target.value)} className="font-mono" spellCheck={false} />
@@ -396,7 +444,7 @@ export function PropertyPage() {
                       });
                     })}
                   >
-                    Allow
+                    Add investor
                   </Button>
                   <Button
                     tone="quiet"
@@ -424,14 +472,14 @@ export function PropertyPage() {
                       });
                     })}
                   >
-                    Freeze
+                    Remove investor
                   </Button>
                 </div>
               </Card>
 
               <Card className="space-y-3">
-                <h2 className="font-serif text-2xl">Transfer shares</h2>
-                <p className="text-sm text-muted">Whole shares only. 250000 is 25% of the supply. The recipient must already be allowed.</p>
+                <h2 className="font-serif text-2xl">4. Give shares</h2>
+                <p className="text-sm text-muted">Whole shares only. 250000 is 25%. The recipient must already be on the allowlist.</p>
                 <Field label="To">
                   <TextInput value={transferTo} onChange={(event) => setTransferTo(event.target.value)} className="font-mono" spellCheck={false} />
                 </Field>
@@ -463,12 +511,12 @@ export function PropertyPage() {
                     });
                   }, `${shares} shares`)}
                 >
-                  Review transfer
+                  Give these shares
                 </Button>
               </Card>
 
               <Card className="space-y-3">
-                <h2 className="font-serif text-2xl">Deposit rent</h2>
+                <h2 className="font-serif text-2xl">5. Deposit rent</h2>
                 <p className="text-sm text-muted">
                   ETH rides in the transaction value. Mock dollars need an approval first, because an ERC-20 will not
                   let this contract pull tokens until you say it may. Only a manager can deposit.
@@ -565,7 +613,7 @@ export function PropertyPage() {
                 </div>
               </Card>
 
-              <Card className="space-y-3">
+              <Card className="hidden space-y-3">
                 <h2 className="font-serif text-2xl">Claim</h2>
                 <p className="text-sm text-muted">
                   A claim pays this account what its shares have earned. The books update before the money moves. The

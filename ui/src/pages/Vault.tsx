@@ -156,8 +156,7 @@ export function VaultPage() {
       {!vault || missing ? (
         <Card className="space-y-3">
           <Empty title="No piggy bank on this chain yet">
-            Deploy one from this page, or paste an address you already deployed with the command line. The bytecode
-            has to be compiled first: npm run contracts:build.
+            The manager deploys the vault from Admin. You can paste an address here if it was already deployed.
           </Empty>
           {tx.phase.step === 'form' || tx.phase.step === 'error' || tx.phase.step === 'preparing' ? (
             <>

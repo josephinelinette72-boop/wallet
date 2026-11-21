@@ -101,3 +101,47 @@ export function holderSlice(address: string, shares: bigint, total: bigint): Hol
     percent: formatSharePercent(shares, total),
   };
 }
+
+/**
+ * How many people actually hold shares. A zero balance is not an investor.
+ * The allowlist can be longer than this list: someone may be allowed and
+ * still hold nothing.
+ */
+export function investorCount(holders: readonly { shares: bigint }[]): number {
+  return holders.filter((holder) => holder.shares > 0n).length;
+}
+
+/**
+ * Rent this person has been paid, plus rent they can still claim.
+ * The contract stores those as two numbers. Together they are "earned to date".
+ * Claiming moves the second number into the first. The total does not change.
+ */
+export function rentEarnedToDate(alreadyPaid: bigint, stillClaimable: bigint): bigint {
+  if (alreadyPaid < 0n || stillClaimable < 0n) {
+    throw new Error('Rent amounts cannot be negative.');
+  }
+  return alreadyPaid + stillClaimable;
+}
+
+/** Add a list of payout amounts. Used for "what the logs say I have been paid". */
+export function sumAmounts(amounts: readonly bigint[]): bigint {
+  return amounts.reduce((total, amount) => total + amount, 0n);
+}
+
+/**
+ * A short picture of the whole building: how many investors, and how large
+ * the biggest slice is. The investor page shows this instead of every tool.
+ */
+export function capTableSummary(
+  holders: readonly { shares: bigint }[],
+  total: bigint,
+): { investors: number; largestPercent: string } {
+  let largest = 0n;
+  for (const holder of holders) {
+    if (holder.shares > largest) largest = holder.shares;
+  }
+  return {
+    investors: investorCount(holders),
+    largestPercent: formatSharePercent(largest, total),
+  };
+}

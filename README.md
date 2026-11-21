@@ -572,27 +572,31 @@ The amber bar at the top does not go away. It says this is a test network. That 
 
 ### A walk through the screens
 
-**Welcome.** Three doors. Create makes 12 words and asks you to write them down, then type them back, before it encrypts them. Import takes words you already have. Open a keystore file takes the JSON from the command line (`.wallet/keystore.json`) so the same locked file works in both places. The file password is at least 8 characters and must not be the 12 words. The pause while saving is scrypt. It is supposed to happen.
+The top bar has three places: **Investor**, **Admin**, and **Wallet**. The account menu next to them switches which address signs. After a property exists, a badge says Admin or Investor. That badge reads the contract. It is not a setting you can flip.
 
-**Unlock and lock.** Unlock asks for that file password. If you set a BIP-39 passphrase, it asks for that too. They are different secrets. Lock drops the words from memory. It does not delete the encrypted copy. Forget, on the Accounts screen, does delete the copy in this browser. The paper is still the backup.
+**Welcome.** Three doors. Create makes 12 words and asks you to write them down, then type them back, before it encrypts them. Import takes words you already have. Open a keystore file takes the JSON from the command line (`.wallet/keystore.json`). The file password is at least 8 characters and must not be the 12 words. The pause while saving is scrypt.
 
-**The top bar.** Anvil is the default. Sepolia asks for an https RPC URL, which often contains an API key. The box hides it. The URL stays in this browser. The dot is the connection, and the chain id is the number the node reported (31337 for Anvil, 11155111 for Sepolia). If those disagree, the page will not sign. Fund from Anvil is only on the home screen, and only while the node is local Anvil.
+**Unlock and lock.** Unlock asks for that file password. Lock drops the words from memory. It does not delete the encrypted copy.
 
-**Home.** ETH, mock dollars, and property shares. Empty until you fund and deploy. Recent activity is this page's own sends plus contract logs. On Anvil, click Fund from Anvil to take play ETH from the published textbook account. The button refuses any other chain.
+**Investor.** The rental, and nothing else. The property name and street, your shares and your percent, the rent you can claim, and one Claim button. Below that: total rent deposited, how many investors, a short cap table, and the rent chart. If you are not the manager, this is the page you live on.
 
-**Accounts.** Each row is `m/44'/60'/0'/0/i`. Use one of them. Copy copies the address. The QR code is the address, not the key. Show the locked fields and you can see scrypt and a ciphertext, and download `keystore.json`.
+**Admin.** Manager tools, in order. Deploy the play dollar and the shares (that account becomes the manager), and deploy the vault. Then the property details and the document hash. Then the allowlist: add an investor, or remove one to freeze their shares. Then give shares to an investor. Then deposit rent in ETH or in mock dollars. The rent chart is the deposit history. If this account is not the manager, the page says **You are not the admin** and does not show those buttons.
 
-**Send.** Type an address and an amount of ETH, then Review. The review is the transaction: chain id, nonce, gas, max fee, tip, and value, with the same explanation the command line prints. Sign and send broadcasts it. Pending means the node has it. Confirmed means it was mined. The hash is public. It is not a key.
+**Wallet.** A second row: Balance, Accounts, Send, Sign, Vault. Balance is ETH and, on local Anvil, Fund from Anvil. Accounts lists `m/44'/60'/0'/0/i`, with copy and a QR code of the address. Send reviews chain id, nonce, gas, and the EIP-1559 fees before it signs. Sign checks an EIP-191 message without using the network. Vault is the piggy bank: deposit and withdraw. Deploying the vault is an Admin action.
 
-**Sign.** Preview shows the EIP-191 hash, the one with the "Ethereum Signed Message" prefix. Sign produces a signature. Check, on the right, needs the text, the signature, and an address. It does not use the network. Change one letter and it fails.
+**Learn.** Each main screen has a closed "Learn" disclosure. Open it when you want the plain-English explanation. It does not cover the buttons.
 
-**Vault.** Deploy creates the piggy bank. Deposit attaches ETH as the transaction value. Withdraw shows value 0, because the contract sends the ETH during the call. The three numbers are your ledger entry, the contract's own total, and the ETH the chain says the contract holds. Paste an address if you already deployed one with `npm run wallet -- contract deploy`.
+**Light and dark.** The sun or moon in the top bar. The amber test-network bar stays up. Both choices are remembered in this browser. Neither is a secret.
 
-**Property.** Deploy is three reviews: the play dollar, the 1,000,000 shares, then a mint of play dollars. The page then shows the street, the document hash, and a box where changing one letter of the placeholder sentence makes the hash stop matching. The cap table is the holders and their percent of 1,000,000. Allow and Freeze are the manager's list. Transfer moves whole shares. Deposit rent is ETH (the value field) or mock dollars (an approval, then a deposit). Claim pays this account what its shares have earned. The chart is one bar per deposit, with ETH and mock dollars drawn separately because they are different units.
+A short practice, still on Anvil:
 
-**Learn.** The Learn button, and the lesson on the welcome screen, explains the idea on that screen in plain English: words, keys, gas, signatures, and why a share token is not a deed.
-
-**Light and dark.** The sun or moon in the top bar. The choice is remembered in this browser. It is not a secret.
+1. Wallet → Balance → Fund from Anvil, so the manager account can pay fees.
+2. Wallet → Accounts → Derive the next address, twice. Those two addresses are the investors.
+3. Admin → Deploy play dollar and shares. Read each review, then sign. You are the manager.
+4. Admin → Add each investor, then give one of them some shares and the other some shares.
+5. Admin → Deposit rent in ETH.
+6. Switch the account menu to the first investor. The badge says Investor. Admin now says you are not the admin.
+7. Investor → Claim. The rent you are owed moves to that account.
 
 When you are done, Ctrl+C in the `npm run ui` window, and Ctrl+C in the Anvil window. The encrypted words remain until you forget them on the Accounts screen or clear the site's data in the browser.
 

@@ -1,47 +1,87 @@
 /**
- * The frame around the unlocked wallet: the warning, the network, the
- * account, and the screen you picked.
+ * The frame around the unlocked wallet.
  *
- * Lock drops the phrase from memory. It does not delete the encrypted copy.
+ * Three places, and only three, in the top bar:
+ *   Investor  — what you own and the rent you can claim
+ *   Admin     — manager tools, hidden from everyone else by the contract role
+ *   Wallet    — accounts, send, sign, and the piggy bank
+ *
+ * The account menu switches which address signs. The badge next to it says
+ * Admin or Investor once a property exists. Lock drops the phrase from memory.
  */
-import {
-  BookOpen,
-  Building2,
-  LayoutDashboard,
-  Lock,
-  Moon,
-  PenLine,
-  PiggyBank,
-  Send,
-  Sun,
-  Wallet,
-} from 'lucide-react';
+import { Lock, Moon, Sun } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { redactRpcUrl } from '@wallet/safety';
+import { propertyRole } from '@wallet/roles';
+import { readPropertyOverview } from '@wallet/property';
 import { useApp, type PageId } from '../state';
-import { LearnDrawer } from './LearnDrawer';
-import { Banner, Button, Note, TextInput } from './ui';
+import { Banner, Button, TextInput } from './ui';
+import { InvestorPage } from '../pages/Investor';
+import { PropertyPage } from '../pages/Property';
 import { DashboardPage } from '../pages/Dashboard';
 import { AccountsPage } from '../pages/Accounts';
 import { SendPage } from '../pages/Send';
 import { SignPage } from '../pages/Sign';
 import { VaultPage } from '../pages/Vault';
-import { PropertyPage } from '../pages/Property';
+import { accountAt } from '../lib/session';
 
-const NAV: { id: PageId; label: string; icon: typeof Wallet }[] = [
-  { id: 'dashboard', label: 'Home', icon: LayoutDashboard },
-  { id: 'accounts', label: 'Accounts', icon: Wallet },
-  { id: 'send', label: 'Send', icon: Send },
-  { id: 'sign', label: 'Sign', icon: PenLine },
-  { id: 'vault', label: 'Vault', icon: PiggyBank },
-  { id: 'property', label: 'Property', icon: Building2 },
+const AREAS: { id: PageId; label: string }[] = [
+  { id: 'investor', label: 'Investor' },
+  { id: 'admin', label: 'Admin' },
+  { id: 'dashboard', label: 'Wallet' },
 ];
+
+const WALLET_PAGES: { id: PageId; label: string }[] = [
+  { id: 'dashboard', label: 'Balance' },
+  { id: 'accounts', label: 'Accounts' },
+  { id: 'send', label: 'Send' },
+  { id: 'sign', label: 'Sign' },
+  { id: 'vault', label: 'Vault' },
+];
+
+function isWalletPage(page: PageId): boolean {
+  return WALLET_PAGES.some((item) => item.id === page);
+}
 
 export function Shell() {
   const app = useApp();
   const [networkOpen, setNetworkOpen] = useState(false);
+  const [roleLabel, setRoleLabel] = useState('No property yet');
   const unlocked = app.wallet.status === 'unlocked' ? app.wallet : null;
+  const accounts = unlocked
+    ? Array.from({ length: unlocked.accountCount }, (_, index) => accountAt(index))
+    : [];
+
+  useEffect(() => {
+    if (!unlocked || !app.live.chainId) {
+      setRoleLabel('No property yet');
+      return;
+    }
+    const property = app.contractsFor(app.live.chainId).property;
+    if (!property) {
+      setRoleLabel('No property yet');
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const overview = await readPropertyOverview({
+          config: app.getConfig(),
+          property: { address: property, source: 'this browser' },
+          who: unlocked.address,
+        });
+        if (cancelled) return;
+        const role = propertyRole({ propertyDeployed: true, youAreManager: overview.youAreManager });
+        setRoleLabel(role === 'manager' ? 'Admin' : 'Investor');
+      } catch {
+        if (!cancelled) setRoleLabel('Role unknown');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [app, unlocked]);
 
   return (
     <div className="min-h-screen">
@@ -50,7 +90,7 @@ export function Shell() {
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
           <div className="mr-auto">
             <p className="font-serif text-xl leading-none">Learning wallet</p>
-            <p className="text-xs text-muted">A textbook you can click</p>
+            <p className="text-xs text-muted">Investor view and admin tools</p>
           </div>
           <button
             type="button"
@@ -62,17 +102,22 @@ export function Shell() {
             <span className="text-muted"> · {app.live.connected ? `chain ${app.live.chainId}` : 'offline'}</span>
           </button>
           {unlocked ? (
-            <button
-              type="button"
-              className="hidden rounded-full border border-line px-3 py-1.5 font-mono text-xs sm:inline"
-              onClick={() => app.setPage('accounts')}
-            >
-              {unlocked.address.slice(0, 6)}…{unlocked.address.slice(-4)}
-            </button>
+            <label className="flex items-center gap-2 text-xs">
+              <span className="rounded-full bg-card-2 px-2 py-1 font-semibold">{roleLabel}</span>
+              <select
+                aria-label="Account"
+                className="rounded-full border border-line bg-card px-2 py-1"
+                value={unlocked.index}
+                onChange={(event) => app.selectAccount(Number(event.target.value))}
+              >
+                {accounts.map((account) => (
+                  <option key={account.path} value={account.path.split('/').pop()}>
+                    Account {account.path.split('/').pop()} · {account.address.slice(0, 6)}…{account.address.slice(-4)}
+                  </option>
+                ))}
+              </select>
+            </label>
           ) : null}
-          <Button tone="ghost" onClick={() => app.setLearnOpen(true)} aria-label="Open the lesson">
-            <BookOpen size={18} /> Learn
-          </Button>
           <Button tone="ghost" onClick={app.toggleTheme} aria-label="Toggle color theme">
             {app.theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           </Button>
@@ -81,26 +126,43 @@ export function Shell() {
           </Button>
         </div>
         {networkOpen ? <NetworkPanel onClose={() => setNetworkOpen(false)} /> : null}
-        <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-3 pb-3">
-          {NAV.map((item) => {
-            const Icon = item.icon;
-            const active = app.page === item.id;
+        <nav className="mx-auto flex max-w-6xl gap-2 px-4 pb-3">
+          {AREAS.map((item) => {
+            const active = item.id === 'dashboard' ? isWalletPage(app.page) : app.page === item.id;
             return (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => app.setPage(item.id)}
+                className={
+                  active
+                    ? 'rounded-full bg-moss px-4 py-1.5 text-sm font-semibold text-moss-ink'
+                    : 'rounded-full px-4 py-1.5 text-sm text-muted hover:bg-card-2'
+                }
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+        {isWalletPage(app.page) ? (
+          <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 pb-3">
+            {WALLET_PAGES.map((item) => (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => app.setPage(item.id)}
                 className={
-                  active
-                    ? 'inline-flex items-center gap-2 rounded-full bg-moss px-3 py-1.5 text-sm font-semibold text-moss-ink'
-                    : 'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm text-muted hover:bg-card-2'
+                  app.page === item.id
+                    ? 'rounded-full bg-card-2 px-3 py-1 text-sm font-semibold'
+                    : 'rounded-full px-3 py-1 text-sm text-muted'
                 }
               >
-                <Icon size={16} /> {item.label}
+                {item.label}
               </button>
-            );
-          })}
-        </nav>
+            ))}
+          </nav>
+        ) : null}
       </header>
       <main className="mx-auto max-w-6xl space-y-4 px-4 py-6">
         {app.notice ? (
@@ -111,22 +173,22 @@ export function Shell() {
             </button>
           </div>
         ) : null}
-        {app.live.error ? <Note tone="bad">{app.live.error}</Note> : null}
+        {app.live.error ? <p className="rounded-2xl bg-danger-bg px-3 py-2 text-sm text-danger">{app.live.error}</p> : null}
         <Page />
       </main>
-      <LearnDrawer topic={app.learnTopic} open={app.learnOpen} onClose={() => app.setLearnOpen(false)} />
     </div>
   );
 }
 
 function Page(): ReactNode {
   const app = useApp();
+  if (app.page === 'admin') return <PropertyPage />;
   if (app.page === 'accounts') return <AccountsPage />;
   if (app.page === 'send') return <SendPage />;
   if (app.page === 'sign') return <SignPage />;
   if (app.page === 'vault') return <VaultPage />;
-  if (app.page === 'property') return <PropertyPage />;
-  return <DashboardPage />;
+  if (app.page === 'dashboard') return <DashboardPage />;
+  return <InvestorPage />;
 }
 
 function NetworkPanel({ onClose }: { onClose: () => void }) {
@@ -156,9 +218,6 @@ function NetworkPanel({ onClose }: { onClose: () => void }) {
           >
             Sepolia
           </Button>
-          <Button tone="ghost" onClick={() => app.setLearnOpen(true)}>
-            Why two networks?
-          </Button>
           <Button tone="ghost" className="ml-auto" onClick={onClose}>
             Close
           </Button>
@@ -172,10 +231,6 @@ function NetworkPanel({ onClose }: { onClose: () => void }) {
             onBlur={() => app.setNetwork({ ...app.network, anvilUrl })}
             spellCheck={false}
           />
-          <span className="mt-1 block text-muted">
-            Default is http://127.0.0.1:8545. If you started Anvil with another port, change it here. The dev server,
-            inside Ubuntu, is what actually calls this address.
-          </span>
         </label>
         <label className="block text-sm">
           <span className="font-semibold">Sepolia RPC URL</span>
@@ -189,14 +244,10 @@ function NetworkPanel({ onClose }: { onClose: () => void }) {
             spellCheck={false}
             autoComplete="off"
           />
-          <span className="mt-1 block text-muted">
-            Often contains an API key. It stays in this browser. The box is hidden so a glance does not copy it. It is
-            not written to git.
-          </span>
+          <span className="mt-1 block text-muted">Hidden because it often contains an API key. It stays in this browser.</span>
         </label>
         <p className="text-sm text-muted">
-          Status: {app.live.connected ? 'connected' : 'not connected'}. Chain id: {app.live.chainId ?? 'unknown'}.
-          Showing {shown || 'no URL yet'}.
+          {app.live.connected ? 'Connected' : 'Not connected'}. Chain id {app.live.chainId ?? 'unknown'}. {shown || 'No URL yet'}.
         </p>
       </div>
     </div>

@@ -251,21 +251,31 @@ export type HolderRow = {
   allowed: boolean;
 };
 
+/** One rent payout to one holder. The investor chart is a list of these. */
+export type ClaimPoint = {
+  hash: Hash;
+  holder: Address;
+  asset: 'eth' | 'stable';
+  amount: bigint;
+  label: string;
+};
+
 export async function readPropertyChain(input: {
   config: WalletConfig;
   property: Address;
   stablecoin: Address;
   extraAddresses: Address[];
-}): Promise<{ holders: HolderRow[]; rent: RentPoint[]; seen: Address[] }> {
+}): Promise<{ holders: HolderRow[]; rent: RentPoint[]; claims: ClaimPoint[]; seen: Address[] }> {
   const client = makePublicClient(input.config);
   const latest = await client.getBlockNumber();
   const span = input.config.chainChoice === 'anvil' ? latest : latest > 50_000n ? 50_000n : latest;
   const fromBlock = latest - span;
 
-  const [transfers, allowedLogs, rentLogs] = await Promise.all([
+  const [transfers, allowedLogs, rentLogs, claimLogs] = await Promise.all([
     client.getLogs({ address: input.property, event: transferEvent, fromBlock, toBlock: 'latest' }),
     client.getLogs({ address: input.property, event: allowedSetEvent, fromBlock, toBlock: 'latest' }),
     client.getLogs({ address: input.property, event: rentDepositedEvent, fromBlock, toBlock: 'latest' }),
+    client.getLogs({ address: input.property, event: rentClaimedEvent, fromBlock, toBlock: 'latest' }),
   ]);
 
   const addresses = new Set<string>();
@@ -304,6 +314,19 @@ export async function readPropertyChain(input: {
     });
   }
 
+  const claims: ClaimPoint[] = [];
+  for (const log of claimLogs) {
+    if (!log.transactionHash || !log.args.holder || log.args.amount === undefined || !log.args.asset) continue;
+    const asset = log.args.asset.toLowerCase() === zeroAddress ? 'eth' : 'stable';
+    claims.push({
+      hash: log.transactionHash,
+      holder: getAddress(log.args.holder),
+      asset,
+      amount: log.args.amount,
+      label: asset === 'eth' ? `${formatEther(log.args.amount)} ETH` : `${formatUnits(log.args.amount, 6)} mUSD`,
+    });
+  }
+
   const holders: HolderRow[] = [];
   for (const lower of addresses) {
     const checksummed = getAddress(lower);
@@ -328,6 +351,7 @@ export async function readPropertyChain(input: {
   return {
     holders,
     rent,
+    claims,
     seen: [...addresses] as Address[],
   };
 }

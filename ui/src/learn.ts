@@ -3,7 +3,7 @@
  * version. The small ? buttons open it. Nothing here is a secret, and none
  * of it is a procedure for using real funds.
  */
-export type LearnTopic = 'welcome' | 'dashboard' | 'accounts' | 'send' | 'sign' | 'vault' | 'property' | 'network';
+export type LearnTopic = 'welcome' | 'investor' | 'dashboard' | 'accounts' | 'send' | 'sign' | 'vault' | 'property' | 'network';
 
 export type Lesson = {
   title: string;
@@ -26,6 +26,18 @@ export const lessons: Record<LearnTopic, Lesson> = {
         body: [
           'The same words work on every Ethereum network. Anvil is a pretend chain on this computer. Sepolia is a public test network. Mainnet is where ETH has a price. This project refuses mainnet so a practice phrase cannot spend something valuable.',
           'Do not type a phrase that already holds real funds. Do not reuse a practice phrase later for real funds.',
+        ],
+      },
+    ],
+  },
+  investor: {
+    title: 'You own a slice of the rent',
+    sections: [
+      {
+        heading: 'Shares and rent',
+        body: [
+          'The building is split into 1,000,000 shares. Your percent is your shares divided by that number. Rent is paid to whoever held the shares when the rent arrived.',
+          'Claim sends you the rent you are owed. It does not sell your shares. You need a little ETH to pay the fee for that transaction.',
         ],
       },
     ],
